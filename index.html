@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ghosts of Space</title>
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="stylesheet" href="/src/styles/main.css" />
+  </head>
+  <body>
+    <div id="app">
+      <!-- Babylon 3D Canvas -->
+      <canvas id="renderCanvas"></canvas>
+
+      <!-- UI Container -->
+      <div id="ui-container">
+        <!-- Persistent HUD Header -->
+        <header id="brand-header">
+          <div class="logo-title">GHOSTS OF SPACE</div>
+          <div class="status-indicator">
+            <span class="status-dot"></span>
+            <span id="engine-status">SYSTEM INITIALIZING...</span>
+          </div>
+          <div class="telemetry-pill">
+            <span id="scene-display">SpaceEnvironment</span>
+            <span class="pill-divider">|</span>
+            <span id="fps-display">--</span> FPS
+          </div>
+        </header>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
