@@ -11,7 +11,6 @@ import {
   PBRMaterial,
   Texture,
   Mesh,
-  AbstractMesh,
   TransformNode,
   SceneLoader,
 } from '@babylonjs/core';
@@ -38,10 +37,7 @@ export class MoonEnvironment {
 
   // Space Shuttle Landing Site
   private landerRoot!: TransformNode;
-  private shuttleRoot: AbstractMesh | null = null;
-
   private shuttleGroundOffset = 0;
-  private shuttleLoaded = false;
 
   private earthMesh!: Mesh;
 
@@ -327,9 +323,11 @@ export class MoonEnvironment {
       this.scene
     );
 
-    // Keep the parent at ground level.
-    // The shuttle itself will move during landing.
-    this.landerRoot.position = Vector3.Zero();
+    this.landerRoot.position = new Vector3(
+      0,
+      this.isLandingCinematic ? 22 : 0,
+      0
+    );
 
     void this.loadSpaceShuttle();
   }
@@ -340,7 +338,7 @@ export class MoonEnvironment {
 
   private async loadSpaceShuttle(): Promise<void> {
     try {
-      console.log('Loading Space Shuttle...');
+      console.log('Loading space shuttle model...');
 
       const result = await SceneLoader.ImportMeshAsync(
         '',
@@ -349,6 +347,8 @@ export class MoonEnvironment {
         this.scene
       );
 
+      // Clean up if the environment was disposed
+      // while the model was loading.
       if (this.disposed) {
         result.meshes.forEach((mesh) => mesh.dispose());
 
@@ -367,16 +367,11 @@ export class MoonEnvironment {
         );
       }
 
-      // Use the imported mesh directly.
-      this.shuttleRoot = shuttle;
+      // Reset initial transform.
+      shuttle.position = Vector3.Zero();
+      shuttle.scaling = Vector3.One();
 
-      // Original working position.
-      shuttle.position = new Vector3(0, 0, 0);
-
-      // Preserve original model scale.
-      shuttle.scaling = new Vector3(1, 1, 1);
-
-      // Original working orientation.
+      // Restore the known working orientation.
       shuttle.rotation = new Vector3(
         0,
         Math.PI / 2,
@@ -384,29 +379,23 @@ export class MoonEnvironment {
       );
 
       shuttle.setEnabled(true);
-
-      // Calculate the shuttle's ground alignment.
       shuttle.computeWorldMatrix(true);
 
+      // Calculate the ground offset using the
+      // complete imported model hierarchy.
       const bounds = shuttle.getHierarchyBoundingVectors(true);
 
       this.shuttleGroundOffset = -bounds.min.y;
 
-      // Determine starting height.
-      const startingHeight = this.isLandingCinematic ? 22 : 0;
-
-      // Attach the shuttle to the stationary landing root.
+      // Attach the shuttle to the landing site.
       shuttle.parent = this.landerRoot;
 
-      // Position the shuttle above the surface.
-      shuttle.position.y =
-        this.shuttleGroundOffset + startingHeight;
+      // Position the shuttle on the ground.
+      shuttle.position.y = this.shuttleGroundOffset;
 
       shuttle.computeWorldMatrix(true);
 
-      this.shuttleLoaded = true;
-
-      console.log('Space Shuttle loaded successfully.');
+      console.log('Space shuttle loaded successfully.');
       console.log(
         'Shuttle ground offset:',
         this.shuttleGroundOffset
@@ -414,14 +403,9 @@ export class MoonEnvironment {
 
     } catch (error) {
       console.error(
-        'Failed to load Space Shuttle:',
+        'Failed to load space-shuttle.glb:',
         error
       );
-
-      // Prevent the game from getting stuck if loading fails.
-      if (this.isLandingCinematic) {
-        this.completeLanding();
-      }
     }
   }
 
@@ -509,12 +493,8 @@ export class MoonEnvironment {
     this.landingCompleted = true;
     this.isLandingCinematic = false;
 
-    // Place shuttle on the lunar surface.
-    if (this.shuttleLoaded && this.shuttleRoot) {
-      this.shuttleRoot.position.y =
-        this.shuttleGroundOffset;
-
-      this.shuttleRoot.computeWorldMatrix(true);
+    if (this.landerRoot) {
+      this.landerRoot.position.y = 0;
     }
 
     this.astronaut.root.setEnabled(true);
@@ -579,19 +559,15 @@ export class MoonEnvironment {
 
         const ease = 1 - Math.pow(1 - t, 2);
 
-        // Move only the shuttle, not its parent.
-        if (this.shuttleLoaded && this.shuttleRoot) {
-          this.shuttleRoot.position.y =
-            this.shuttleGroundOffset + 22 * (1 - ease);
+        if (this.landerRoot) {
+          this.landerRoot.position.y = 22 * (1 - ease);
 
-          this.shuttleRoot.computeWorldMatrix(true);
+          this.camera.camera.target = new Vector3(
+            0,
+            this.landerRoot.position.y + 2.5,
+            0
+          );
         }
-
-        this.camera.camera.target = new Vector3(
-          0,
-          22 * (1 - ease) + 2.5,
-          0
-        );
 
         this.camera.camera.alpha += dt * 0.12;
 
@@ -660,9 +636,6 @@ export class MoonEnvironment {
     if (this.landerRoot) {
       this.landerRoot.dispose(false, true);
     }
-
-    this.shuttleRoot = null;
-    this.shuttleLoaded = false;
 
     this.artifactManager?.dispose();
     this.astronaut?.dispose();

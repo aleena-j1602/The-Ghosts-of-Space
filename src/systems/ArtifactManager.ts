@@ -25,18 +25,27 @@ export class ArtifactManager {
 
   private elapsedTime = 0;
 
+  public level: number = 1;
+
   private artifactPositions: Record<string, Vector3> = {
+    // Level 1: Moon (Mare Tranquillitatis & Hadley)
     'a11-lm5-descent': new Vector3(32, 0, 22),
     'a12-lm6-ascent': new Vector3(-28, 0, 32),
     'a15-lm10-ascent': new Vector3(14, 0, -38),
+
+    // Level 2: Mars (Chryse Planitia, Ares Vallis & Gusev Crater)
+    'viking-1-lander': new Vector3(34, 0, 24),
+    'sojourner': new Vector3(-28, 0, 30),
+    'spirit': new Vector3(16, 0, -36),
   };
 
-  constructor(scene: Scene) {
+  constructor(scene: Scene, level: number = 1) {
     this.scene = scene;
+    this.level = level;
 
-    // Load Moon artifacts (Level 1).
+    // Load artifacts filtered by current level.
     this.artifacts = Object.values(ARTIFACTS_DATA).filter(
-      (artifact) => artifact.level === 1
+      (artifact) => artifact.level === this.level
     );
 
     this.spawnArtifacts();
@@ -72,6 +81,7 @@ export class ArtifactManager {
     const identity = `${artifact.id} ${artifact.commonName} ${artifact.officialName}`
       .toLowerCase();
 
+    // Moon artifacts
     if (
       identity.includes('eagle') ||
       identity.includes('lm-5') ||
@@ -93,15 +103,33 @@ export class ArtifactManager {
     }
 
     if (
-      identity.includes('rover') ||
-      identity.includes('lunar roving vehicle') ||
-      identity.includes('lrv') ||
-      identity.includes('falcon') ||
-      identity.includes('lm-10') ||
-      identity.includes('lm10') ||
+      identity.includes('rover') && (identity.includes('lunar') || identity.includes('lrv') || identity.includes('falcon') || identity.includes('apollo 15')) ||
       artifact.id === 'a15-lm10-ascent'
     ) {
       return this.buildLunarRover();
+    }
+
+    // Mars artifacts
+    if (
+      identity.includes('viking') ||
+      artifact.id === 'viking-1-lander'
+    ) {
+      return this.buildVikingLander();
+    }
+
+    if (
+      identity.includes('sojourner') ||
+      artifact.id === 'sojourner'
+    ) {
+      return this.buildSojournerRover();
+    }
+
+    if (
+      identity.includes('spirit') ||
+      identity.includes('mer-a') ||
+      artifact.id === 'spirit'
+    ) {
+      return this.buildSpiritRover();
     }
 
     return this.buildGenericArtifact(artifact);
@@ -497,6 +525,330 @@ export class ArtifactManager {
     seismometer.position = new Vector3(-1.6, 0.25, -0.6);
     seismometer.material = goldMat;
     seismometer.parent = root;
+
+    return root;
+  }
+
+  // -------------------------------------------------------------------------
+  // MARS ARTIFACT 1: VIKING 1 LANDER (1976 - Chryse Planitia)
+  // -------------------------------------------------------------------------
+
+  private buildVikingLander(): TransformNode {
+    const root = new TransformNode('viking1_lander_root', this.scene);
+
+    const whiteMat = new StandardMaterial('vikingWhiteMat', this.scene);
+    whiteMat.diffuseColor = new Color3(0.86, 0.88, 0.9);
+    whiteMat.specularColor = new Color3(0.3, 0.3, 0.35);
+
+    const darkMat = new StandardMaterial('vikingDarkMat', this.scene);
+    darkMat.diffuseColor = new Color3(0.2, 0.22, 0.26);
+
+    const goldMat = new StandardMaterial('vikingGoldMat', this.scene);
+    goldMat.diffuseColor = new Color3(0.92, 0.72, 0.18);
+    goldMat.specularColor = new Color3(1, 0.85, 0.3);
+
+    // Hexagonal main lander body
+    const body = MeshBuilder.CreateCylinder(
+      'vikingBody',
+      {
+        height: 0.85,
+        diameter: 2.8,
+        tessellation: 6,
+      },
+      this.scene
+    );
+    body.position.y = 0.95;
+    body.material = whiteMat;
+    body.parent = root;
+
+    // Three landing struts with footpads (120 deg apart)
+    for (let i = 0; i < 3; i++) {
+      const angle = (i * Math.PI * 2) / 3;
+      const legDist = 2.2;
+
+      const leg = MeshBuilder.CreateCylinder(
+        `vikingLeg_${i}`,
+        {
+          height: 1.8,
+          diameter: 0.14,
+        },
+        this.scene
+      );
+      leg.position = new Vector3(
+        Math.cos(angle) * (legDist * 0.5),
+        0.55,
+        Math.sin(angle) * (legDist * 0.5)
+      );
+      leg.rotation.z = Math.cos(angle) * 0.55;
+      leg.rotation.x = -Math.sin(angle) * 0.55;
+      leg.material = whiteMat;
+      leg.parent = root;
+
+      const pad = MeshBuilder.CreateCylinder(
+        `vikingPad_${i}`,
+        {
+          height: 0.1,
+          diameter: 0.75,
+          tessellation: 12,
+        },
+        this.scene
+      );
+      pad.position = new Vector3(
+        Math.cos(angle) * legDist,
+        0.05,
+        Math.sin(angle) * legDist
+      );
+      pad.material = darkMat;
+      pad.parent = root;
+    }
+
+    // Dual RTG power canisters with wind covers
+    const rtg1 = MeshBuilder.CreateCylinder('vikingRTG1', { height: 0.7, diameter: 0.42, tessellation: 10 }, this.scene);
+    rtg1.position = new Vector3(-0.9, 1.45, 0.4);
+    rtg1.material = darkMat;
+    rtg1.parent = root;
+
+    const rtg2 = MeshBuilder.CreateCylinder('vikingRTG2', { height: 0.7, diameter: 0.42, tessellation: 10 }, this.scene);
+    rtg2.position = new Vector3(-0.9, 1.45, -0.4);
+    rtg2.material = darkMat;
+    rtg2.parent = root;
+
+    // High-gain parabolic dish antenna (directed Earthward)
+    const dish = MeshBuilder.CreateDisc('vikingDish', { radius: 0.45, tessellation: 18 }, this.scene);
+    dish.rotation.x = Math.PI / 3;
+    dish.rotation.y = -Math.PI / 4;
+    dish.position = new Vector3(0.5, 1.85, 0.5);
+    dish.material = whiteMat;
+    dish.parent = root;
+
+    // Dual facsimile scanning cameras
+    for (let c = 0; c < 2; c++) {
+      const cam = MeshBuilder.CreateCylinder(`vikingCam_${c}`, { height: 0.55, diameter: 0.18 }, this.scene);
+      cam.position = new Vector3(0.2, 1.65, c === 0 ? 0.7 : -0.7);
+      cam.material = darkMat;
+      cam.parent = root;
+    }
+
+    // Surface sampler robotic boom arm extending to the soil
+    const arm = MeshBuilder.CreateCylinder('vikingArm', { height: 1.8, diameter: 0.08 }, this.scene);
+    arm.rotation.z = Math.PI / 3.2;
+    arm.position = new Vector3(1.3, 0.6, 0);
+    arm.material = whiteMat;
+    arm.parent = root;
+
+    const scoop = MeshBuilder.CreateBox('vikingScoop', { width: 0.22, height: 0.12, depth: 0.16 }, this.scene);
+    scoop.position = new Vector3(2.1, 0.12, 0);
+    scoop.material = goldMat;
+    scoop.parent = root;
+
+    // Meteorology mast (weather station)
+    const mast = MeshBuilder.CreateCylinder('vikingMetMast', { height: 1.4, diameter: 0.06 }, this.scene);
+    mast.position = new Vector3(0, 1.95, -0.8);
+    mast.material = darkMat;
+    mast.parent = root;
+
+    return root;
+  }
+
+  // -------------------------------------------------------------------------
+  // MARS ARTIFACT 2: SOJOURNER ROVER (1997 - Ares Vallis)
+  // -------------------------------------------------------------------------
+
+  private buildSojournerRover(): TransformNode {
+    const root = new TransformNode('sojourner_rover_root', this.scene);
+
+    const solarMat = new StandardMaterial('sojournerSolarMat', this.scene);
+    solarMat.diffuseColor = new Color3(0.08, 0.16, 0.38);
+    solarMat.specularColor = new Color3(0.6, 0.75, 0.95);
+
+    const metalMat = new StandardMaterial('sojournerMetalMat', this.scene);
+    metalMat.diffuseColor = new Color3(0.72, 0.75, 0.8);
+
+    const wheelMat = new StandardMaterial('sojournerWheelMat', this.scene);
+    wheelMat.diffuseColor = new Color3(0.25, 0.26, 0.28);
+
+    const apxsMat = new StandardMaterial('sojournerAPXSMat', this.scene);
+    apxsMat.diffuseColor = new Color3(0.85, 0.68, 0.2);
+
+    // Warm electronics box chassis
+    const chassis = MeshBuilder.CreateBox(
+      'sojournerChassis',
+      {
+        width: 1.05,
+        height: 0.3,
+        depth: 0.75,
+      },
+      this.scene
+    );
+    chassis.position.y = 0.42;
+    chassis.material = metalMat;
+    chassis.parent = root;
+
+    // Flat solar panel top cover
+    const solarPanel = MeshBuilder.CreateBox(
+      'sojournerSolarPanel',
+      {
+        width: 1.15,
+        height: 0.06,
+        depth: 0.85,
+      },
+      this.scene
+    );
+    solarPanel.position.y = 0.58;
+    solarPanel.material = solarMat;
+    solarPanel.parent = root;
+
+    // 6-wheel rocker-bogie mobility system (3 per side)
+    const wheelPositions = [
+      { x: 0.55, z: 0.48 },
+      { x: 0.0, z: 0.5 },
+      { x: -0.55, z: 0.48 },
+      { x: 0.55, z: -0.48 },
+      { x: 0.0, z: -0.5 },
+      { x: -0.55, z: -0.48 },
+    ];
+
+    wheelPositions.forEach((wp, idx) => {
+      const wheel = MeshBuilder.CreateCylinder(
+        `sojournerWheel_${idx}`,
+        {
+          height: 0.14,
+          diameter: 0.28,
+          tessellation: 12,
+        },
+        this.scene
+      );
+      wheel.rotation.x = Math.PI / 2;
+      wheel.position = new Vector3(wp.x, 0.14, wp.z);
+      wheel.material = wheelMat;
+      wheel.parent = root;
+    });
+
+    // Forward stereo cameras
+    const frontCam = MeshBuilder.CreateBox('sojournerFrontCam', { width: 0.28, height: 0.12, depth: 0.12 }, this.scene);
+    frontCam.position = new Vector3(0.55, 0.62, 0);
+    frontCam.material = metalMat;
+    frontCam.parent = root;
+
+    // Rear APXS sensor head (placed down near ground)
+    const apxs = MeshBuilder.CreateCylinder('sojournerAPXS', { height: 0.18, diameter: 0.22, tessellation: 10 }, this.scene);
+    apxs.rotation.z = Math.PI / 2;
+    apxs.position = new Vector3(-0.68, 0.18, 0);
+    apxs.material = apxsMat;
+    apxs.parent = root;
+
+    // Whip antenna
+    const antenna = MeshBuilder.CreateCylinder('sojournerAntenna', { height: 0.65, diameter: 0.02 }, this.scene);
+    antenna.position = new Vector3(-0.35, 0.9, 0.28);
+    antenna.material = metalMat;
+    antenna.parent = root;
+
+    return root;
+  }
+
+  // -------------------------------------------------------------------------
+  // MARS ARTIFACT 3: SPIRIT ROVER / MER-A (2004 - Gusev Crater)
+  // -------------------------------------------------------------------------
+
+  private buildSpiritRover(): TransformNode {
+    const root = new TransformNode('spirit_mer_root', this.scene);
+
+    const solarMat = new StandardMaterial('spiritSolarMat', this.scene);
+    solarMat.diffuseColor = new Color3(0.06, 0.12, 0.28);
+    solarMat.specularColor = new Color3(0.7, 0.85, 1.0);
+
+    const metalMat = new StandardMaterial('spiritMetalMat', this.scene);
+    metalMat.diffuseColor = new Color3(0.78, 0.8, 0.84);
+
+    const wheelMat = new StandardMaterial('spiritWheelMat', this.scene);
+    wheelMat.diffuseColor = new Color3(0.2, 0.22, 0.25);
+
+    const goldFoilMat = new StandardMaterial('spiritGoldMat', this.scene);
+    goldFoilMat.diffuseColor = new Color3(0.95, 0.78, 0.2);
+
+    // Warm electronics box (central body)
+    const web = MeshBuilder.CreateBox('spiritWEB', { width: 1.4, height: 0.5, depth: 1.1 }, this.scene);
+    web.position.y = 0.65;
+    web.material = goldFoilMat;
+    web.parent = root;
+
+    // Arrowhead / Triangular Solar Array Deck
+    const solarDeck = MeshBuilder.CreateBox('spiritSolarDeck', { width: 2.1, height: 0.08, depth: 1.7 }, this.scene);
+    solarDeck.position.y = 0.94;
+    solarDeck.material = solarMat;
+    solarDeck.parent = root;
+
+    // Wing flare panels
+    const wingLeft = MeshBuilder.CreateBox('spiritWingL', { width: 0.8, height: 0.06, depth: 0.9 }, this.scene);
+    wingLeft.rotation.z = -0.15;
+    wingLeft.position = new Vector3(-0.85, 0.96, 0.9);
+    wingLeft.material = solarMat;
+    wingLeft.parent = root;
+
+    const wingRight = MeshBuilder.CreateBox('spiritWingR', { width: 0.8, height: 0.06, depth: 0.9 }, this.scene);
+    wingRight.rotation.z = -0.15;
+    wingRight.position = new Vector3(-0.85, 0.96, -0.9);
+    wingRight.material = solarMat;
+    wingRight.parent = root;
+
+    // Tall Pancam / Navcam Mast (1.4m height)
+    const mast = MeshBuilder.CreateCylinder('spiritMast', { height: 1.35, diameter: 0.08 }, this.scene);
+    mast.position = new Vector3(0.55, 1.62, 0);
+    mast.material = metalMat;
+    mast.parent = root;
+
+    // Masthead camera crossbar
+    const camBar = MeshBuilder.CreateBox('spiritCamBar', { width: 0.15, height: 0.12, depth: 0.45 }, this.scene);
+    camBar.position = new Vector3(0.55, 2.3, 0);
+    camBar.material = metalMat;
+    camBar.parent = root;
+
+    // High-Gain Antenna parabolic dish
+    const hga = MeshBuilder.CreateDisc('spiritHGA', { radius: 0.28, tessellation: 16 }, this.scene);
+    hga.rotation.x = Math.PI / 3;
+    hga.position = new Vector3(-0.55, 1.25, -0.55);
+    hga.material = metalMat;
+    hga.parent = root;
+
+    // 6-wheel rocker-bogie system
+    const wheels = [
+      { x: 0.95, z: 0.85, turn: 0.0 },
+      { x: 0.0, z: 0.95, turn: 0.0 },
+      { x: -0.95, z: 0.85, turn: 0.0 },
+      // Right-side wheels: front right wheel (turn: 0.35) commemorates the stuck wheel that dug up pure silica!
+      { x: 0.95, z: -0.85, turn: 0.35 },
+      { x: 0.0, z: -0.95, turn: 0.0 },
+      { x: -0.95, z: -0.85, turn: 0.0 },
+    ];
+
+    wheels.forEach((w, idx) => {
+      const wheel = MeshBuilder.CreateCylinder(
+        `spiritWheel_${idx}`,
+        {
+          height: 0.22,
+          diameter: 0.44,
+          tessellation: 14,
+        },
+        this.scene
+      );
+      wheel.rotation.x = Math.PI / 2;
+      wheel.rotation.y = w.turn;
+      wheel.position = new Vector3(w.x, 0.22, w.z);
+      wheel.material = wheelMat;
+      wheel.parent = root;
+    });
+
+    // Robotic Instrument Arm (IDD) extended toward a soil trench
+    const arm1 = MeshBuilder.CreateCylinder('spiritArm1', { height: 0.7, diameter: 0.08 }, this.scene);
+    arm1.rotation.z = Math.PI / 3.5;
+    arm1.position = new Vector3(1.15, 0.5, 0);
+    arm1.material = metalMat;
+    arm1.parent = root;
+
+    const turret = MeshBuilder.CreateCylinder('spiritTurret', { height: 0.2, diameter: 0.24 }, this.scene);
+    turret.position = new Vector3(1.55, 0.15, 0);
+    turret.material = goldFoilMat;
+    turret.parent = root;
 
     return root;
   }

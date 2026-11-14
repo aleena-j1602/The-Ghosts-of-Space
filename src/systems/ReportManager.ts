@@ -26,38 +26,73 @@ export class ReportManager {
   ): void {
     const gs = GameState.getInstance();
     const collectedArts = Object.values(ARTIFACTS_DATA).filter((a) => a.isCollected);
+    const isDeepSpace = gs.currentLevel === 'DEEP_SPACE';
+    const isMars = gs.currentLevel === 'MARS';
+    const sectorName = isDeepSpace ? 'Deep Space Research Observatory' : isMars ? 'Chryse Base' : 'Tranquility Base';
 
     const reportLines: DialogueLine[] = [
       {
         id: 'earth_report_1',
         speaker: 'SYSTEM',
-        text: `TRANSMITTING HIGH-BANDWIDTH DATA TO EARTH CONTROL... [${collectedArts.length} ARTIFACT PACKETS ENCRYPTED]`,
+        text: `TRANSMITTING HIGH-BANDWIDTH DEEP-SPACE RELAY TO EARTH CONTROL... [${collectedArts.length} ARTIFACT PACKETS ENCRYPTED]`,
       },
       {
         id: 'earth_report_2',
         speaker: 'EARTH CONTROL',
-        text: `Recovery data received loud and clear, Tranquility Base! Exceptional work, Explorer. Our archaeological team has integrated your telemetry into the permanent Space Heritage Archive.`,
+        text: isDeepSpace
+          ? `Telemetry received through the Deep Space Network, ${sectorName}! Probe telemetry and scientific analyses successfully integrated into the Master Solar Heritage Archive!`
+          : `Telemetry received across interplanetary space, ${sectorName}! Outstanding work, Explorer. Your archaeological findings have been integrated into the permanent Space Heritage Archive.`,
       },
       {
         id: 'earth_report_3',
         speaker: 'LUNA',
-        text: `See? I told you we'd make a brilliant team! Earth Control just credited bonus support rations to our habitat dock.`,
+        text: isDeepSpace
+          ? `High-frequency transmission verified! Earth Control is confirming data integrity across all planetary and deep-space sectors!`
+          : isMars
+          ? `High-gain transmission confirmed! Earth Control is cheering all the way in Houston!`
+          : `See? I told you we'd make a brilliant team! Earth Control just credited bonus support rations to our habitat dock.`,
         lunaExpression: 'happy',
       },
     ];
 
     if (gs.artifactsCollected >= gs.recoveryTarget) {
-      reportLines.push({
-        id: 'earth_report_4',
-        speaker: 'EARTH CONTROL',
-        text: `ATTENTION EXPLORER: You have successfully recovered all 3 target artifacts for Level 1! You are officially awarded the 'LUNAR PIONEER' distinction and promoted to Senior Space Archaeologist!`,
-      });
-      reportLines.push({
-        id: 'earth_report_5',
-        speaker: 'LUNA',
-        text: `A promotion! Next stop: Mars, the Red Frontier! Let's get our systems prepped!`,
-        lunaExpression: 'witty',
-      });
+      if (isDeepSpace) {
+        reportLines.push({
+          id: 'earth_report_4_deep',
+          speaker: 'EARTH CONTROL',
+          text: `SPECIAL CITATION: To the crew of the Ghost Archive vessel. All 3 Deep Space Probes have been archived. You have achieved 100% mission completion across Moon, Mars, and the Outer Solar System!`,
+        });
+        reportLines.push({
+          id: 'earth_report_5_deep',
+          speaker: 'LUNA',
+          text: `Mission Accomplished! We brought humanity's greatest exploratory heritage safely home!`,
+          lunaExpression: 'happy',
+        });
+      } else if (isMars) {
+        reportLines.push({
+          id: 'earth_report_4_mars',
+          speaker: 'EARTH CONTROL',
+          text: `ATTENTION EXPLORER: You have successfully recovered all 3 target artifacts for Level 2! You are officially awarded the 'MARTIAN TRAILBLAZER' distinction!`,
+        });
+        reportLines.push({
+          id: 'earth_report_5_mars',
+          speaker: 'LUNA',
+          text: `We mastered the Red Planet! Enter the habitat cabin to plot our trajectory for Level 3: Deep Space!`,
+          lunaExpression: 'witty',
+        });
+      } else {
+        reportLines.push({
+          id: 'earth_report_4',
+          speaker: 'EARTH CONTROL',
+          text: `ATTENTION EXPLORER: You have successfully recovered all 3 target artifacts for Level 1! You are officially awarded the 'LUNAR PIONEER' distinction and promoted to Senior Space Archaeologist!`,
+        });
+        reportLines.push({
+          id: 'earth_report_5',
+          speaker: 'LUNA',
+          text: `A promotion! Return to the cabin to plot our trajectory for Level 2: Mars! Let's get our systems prepped!`,
+          lunaExpression: 'witty',
+        });
+      }
     }
 
     dialogueUI.startDialogue(reportLines, () => {

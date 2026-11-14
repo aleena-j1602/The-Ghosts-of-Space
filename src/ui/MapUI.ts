@@ -7,12 +7,15 @@ export class MapUI {
   private ctx!: CanvasRenderingContext2D;
   private isVisible: boolean = false;
   private closeBtn!: HTMLElement;
+  private mapTagEl!: HTMLElement;
+  private mapTitleEl!: HTMLElement;
 
   private artifacts: ArtifactDefinition[] = [];
   private positionResolver?: (id: string) => { x: number; z: number } | undefined;
   private playerPos: Vector3 = new Vector3(0, 0, 0);
   private playerForward: Vector3 = new Vector3(0, 0, 1);
   private detectedArtifactId: string | null = null;
+  private onDeepSpaceProbeSelected?: (probe: ArtifactDefinition) => void;
 
   constructor() {
     this.container = document.createElement('div');
@@ -23,8 +26,8 @@ export class MapUI {
       <div class="map-window glass-card">
         <div class="map-header">
           <div class="map-header-left">
-            <div class="card-tag">NAVIGATION RELAY // ORBITAL TELEMETRY</div>
-            <h2>LUNAR SECTOR MAP: MARE TRANQUILLITATIS</h2>
+            <div id="map-header-tag" class="card-tag">NAVIGATION RELAY // ORBITAL TELEMETRY</div>
+            <h2 id="map-header-title">LUNAR SECTOR MAP: MARE TRANQUILLITATIS</h2>
           </div>
           <button id="btn-close-map" class="map-close-btn">&times;</button>
         </div>
@@ -36,13 +39,13 @@ export class MapUI {
           </div>
 
           <div class="map-legend-panel">
-            <h3>ARCHAEOLOGICAL TARGETS</h3>
+            <h3 id="map-panel-heading">ARCHAEOLOGICAL TARGETS</h3>
             <div id="map-target-list" class="target-list">
               <!-- Dynamically populated -->
             </div>
 
-            <div class="map-legend-keys">
-              <div class="legend-item"><span class="legend-dot shelter-dot"></span> LANDING SHELTER (0, 0)</div>
+            <div id="map-legend-box" class="map-legend-keys">
+              <div class="legend-item"><span class="legend-dot shelter-dot"></span> BASE CAMP / SHIP</div>
               <div class="legend-item"><span class="legend-dot player-dot"></span> EXPLORER &amp; LUNA</div>
               <div class="legend-item"><span class="legend-dot target-dot"></span> RECOVERABLE ARTIFACT</div>
               <div class="legend-item"><span class="legend-dot recovered-dot"></span> SECURED ARCHIVE ENTRY</div>
@@ -52,7 +55,7 @@ export class MapUI {
 
         <div class="map-footer">
           <span>PRESS [M] OR ESC TO CLOSE NAVIGATION</span>
-          <span class="telemetry-tag">GRID RANGE: &plusmn;90 METERS</span>
+          <span id="map-footer-scale" class="telemetry-tag">GRID RANGE: &plusmn;90 METERS</span>
         </div>
       </div>
     `;
@@ -62,8 +65,19 @@ export class MapUI {
     this.mapCanvas = this.container.querySelector('#lunarMapCanvas') as HTMLCanvasElement;
     this.ctx = this.mapCanvas.getContext('2d') as CanvasRenderingContext2D;
     this.closeBtn = this.container.querySelector('#btn-close-map') as HTMLElement;
+    this.mapTagEl = this.container.querySelector('#map-header-tag') as HTMLElement;
+    this.mapTitleEl = this.container.querySelector('#map-header-title') as HTMLElement;
 
     this.bindEvents();
+  }
+
+  public setOnDeepSpaceProbeSelected(cb: (probe: ArtifactDefinition) => void): void {
+    this.onDeepSpaceProbeSelected = cb;
+  }
+
+  public setMapTitle(tag: string, title: string): void {
+    if (this.mapTagEl) this.mapTagEl.textContent = tag;
+    if (this.mapTitleEl) this.mapTitleEl.textContent = title;
   }
 
   private bindEvents(): void {
@@ -148,6 +162,53 @@ export class MapUI {
     const listEl = this.container.querySelector('#map-target-list');
     if (!listEl) return;
 
+    const isDeepSpace = this.artifacts.length > 0 && this.artifacts[0].level === 3;
+
+    if (isDeepSpace) {
+      listEl.innerHTML = this.artifacts
+        .map((art) => {
+          const statusClass = art.isCollected ? 'status-secured' : 'status-detected';
+          const distanceLabel =
+            art.id.includes('dawn')
+              ? '415,000,000 KM &bull; ASTEROID BELT'
+              : art.id.includes('near')
+              ? '180,000,000 KM &bull; 433 EROS'
+              : '820,000,000 KM &bull; JUPITER OUTBOUND';
+
+          return `
+            <div class="target-card ${statusClass} deep-space-target-card">
+              <div class="target-info">
+                <span class="target-name">${art.commonName}</span>
+                <span class="target-coords">${distanceLabel} &bull; ${art.agency.split('—')[0].trim()}</span>
+              </div>
+              ${
+                art.isCollected
+                  ? `<span class="target-badge badge-verified">✓ SCIENCE ARCHIVED</span>`
+                  : `<button class="btn-deep-intercept" data-art-id="${art.id}">
+                      INTERCEPT (1 DAY FLIGHT) ▶
+                    </button>`
+              }
+            </div>
+          `;
+        })
+        .join('');
+
+      // Bind intercept buttons
+      const buttons = listEl.querySelectorAll('.btn-deep-intercept');
+      buttons.forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const targetId = (btn as HTMLElement).getAttribute('data-art-id');
+          const targetProbe = this.artifacts.find((a) => a.id === targetId);
+          if (targetProbe && this.onDeepSpaceProbeSelected) {
+            this.hide();
+            this.onDeepSpaceProbeSelected(targetProbe);
+          }
+        });
+      });
+      return;
+    }
+
     listEl.innerHTML = this.artifacts
       .map((art) => {
         const isDetected = this.detectedArtifactId === art.id;
@@ -180,6 +241,91 @@ export class MapUI {
 
     const centerX = w / 2;
     const centerY = h / 2;
+
+    const isDeepSpace = this.artifacts.length > 0 && this.artifacts[0].level === 3;
+
+    if (isDeepSpace) {
+      // Draw Interplanetary Astrogation Map
+      const footerScale = this.container.querySelector('#map-footer-scale');
+      if (footerScale) footerScale.textContent = 'SCALE: ASTRONOMICAL UNITS (AU) // DEEP SPACE OBSERVATORY';
+
+      // 1. Orbital rings for Sun & planets
+      const orbits = [
+        { r: 25, label: 'Sun' },
+        { r: 48, label: 'Mercury' },
+        { r: 72, label: 'Venus' },
+        { r: 100, label: 'Earth' },
+        { r: 135, label: 'Mars' },
+        { r: 185, label: 'Asteroid Belt' },
+        { r: 240, label: 'Jupiter' },
+      ];
+
+      orbits.forEach((orb) => {
+        this.ctx.strokeStyle = orb.r === 185 ? 'rgba(245, 185, 66, 0.25)' : 'rgba(70, 217, 232, 0.14)';
+        this.ctx.lineWidth = orb.r === 185 ? 4 : 1;
+        this.ctx.setLineDash(orb.r === 185 ? [3, 4] : []);
+        this.ctx.beginPath();
+        this.ctx.arc(centerX, centerY, orb.r, 0, Math.PI * 2);
+        this.ctx.stroke();
+      });
+      this.ctx.setLineDash([]);
+
+      // Sun at center
+      this.ctx.fillStyle = '#f5b942';
+      this.ctx.beginPath();
+      this.ctx.arc(centerX, centerY, 8, 0, Math.PI * 2);
+      this.ctx.fill();
+
+      // Earth & Mars icons
+      this.ctx.fillStyle = '#46d9e8';
+      this.ctx.beginPath();
+      this.ctx.arc(centerX + 100, centerY, 4, 0, Math.PI * 2);
+      this.ctx.fill();
+
+      this.ctx.fillStyle = '#ef4444';
+      this.ctx.beginPath();
+      this.ctx.arc(centerX - 95, centerY - 95, 3.5, 0, Math.PI * 2);
+      this.ctx.fill();
+
+      // Probe Locations
+      const probeMapPos = [
+        { id: 'near-shoemaker', x: centerX + 115, y: centerY - 80, name: 'NEAR (433 Eros)' },
+        { id: 'nasa-dawn-spacecraft', x: centerX - 130, y: centerY + 130, name: 'Dawn (Ceres/Vesta)' },
+        { id: 'pioneer-10', x: centerX + 175, y: centerY + 155, name: 'Pioneer 10' },
+      ];
+
+      probeMapPos.forEach((probe) => {
+        const art = this.artifacts.find((a) => a.id === probe.id);
+        const isCollected = art?.isCollected;
+
+        this.ctx.strokeStyle = isCollected ? '#22c55e' : '#f5b942';
+        this.ctx.fillStyle = isCollected ? '#22c55e' : '#f5b942';
+
+        // Pulse dot
+        this.ctx.beginPath();
+        this.ctx.arc(probe.x, probe.y, 6, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        this.ctx.beginPath();
+        this.ctx.arc(probe.x, probe.y, 11, 0, Math.PI * 2);
+        this.ctx.lineWidth = 1.5;
+        this.ctx.stroke();
+
+        this.ctx.font = '10px Consolas, monospace';
+        this.ctx.fillText(probe.name, probe.x + 10, probe.y + 4);
+      });
+
+      // Research Vessel Current Location
+      this.ctx.fillStyle = '#46d9e8';
+      this.ctx.beginPath();
+      this.ctx.arc(centerX + 70, centerY + 30, 5, 0, Math.PI * 2);
+      this.ctx.fill();
+      this.ctx.font = '10px Consolas, monospace';
+      this.ctx.fillText('RESEARCH SHIP', centerX + 80, centerY + 34);
+
+      return;
+    }
+
     const mapScale = 2.2; // pixels per meter
 
     // 1. Grid lines

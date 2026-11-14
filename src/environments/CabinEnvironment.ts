@@ -24,11 +24,14 @@ export class CabinEnvironment {
   private lunaApproachProgress: number = 0;
   private isLunaApproaching: boolean = true;
   private onAwakenedCallback?: () => void;
+  private isRechargeMode: boolean = false;
 
-  constructor(engine: Engine, onAwakened?: () => void) {
+  constructor(engine: Engine, onAwakened?: () => void, isRechargeMode: boolean = false) {
     this.scene = new Scene(engine);
     this.scene.clearColor = new Color4(0.04, 0.06, 0.1, 1.0);
     this.onAwakenedCallback = onAwakened;
+    this.isRechargeMode = isRechargeMode;
+    this.isLunaApproaching = !isRechargeMode;
 
     this.setupCamera();
     this.setupLighting();
@@ -37,6 +40,14 @@ export class CabinEnvironment {
     this.setupHibernationBerth();
     this.setupLuna();
     this.setupAnimations();
+
+    if (this.isRechargeMode) {
+      setTimeout(() => {
+        if (this.onAwakenedCallback) {
+          this.onAwakenedCallback();
+        }
+      }, 350);
+    }
   }
 
   // --------------------------------------------------
@@ -350,11 +361,13 @@ export class CabinEnvironment {
       'CabinLuna'
     );
 
-    this.luna.setPosition(
-      new Vector3(0.8, 1.25, 2.2)
-    );
-
-    this.luna.setExpression('curious');
+    if (this.isRechargeMode) {
+      this.luna.setPosition(new Vector3(0.15, 1.35, 0.8));
+      this.luna.setExpression('witty');
+    } else {
+      this.luna.setPosition(new Vector3(0.8, 1.25, 2.2));
+      this.luna.setExpression('curious');
+    }
   }
 
   // --------------------------------------------------

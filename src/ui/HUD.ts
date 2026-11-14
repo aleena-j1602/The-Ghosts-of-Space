@@ -25,6 +25,8 @@ export class HUD {
   private lunaAlertText!: HTMLElement;
 
   private onMapClickCallback?: () => void;
+  private levelTagEl!: HTMLElement;
+  private levelTitleEl!: HTMLElement;
 
   constructor() {
     this.gameState = GameState.getInstance();
@@ -36,8 +38,8 @@ export class HUD {
     this.container.innerHTML = `
       <!-- Top Left: Mission & Level Info -->
       <div class="hud-top-left glass-card">
-        <div class="hud-level-tag">SECTOR // MOON &bull; MARE TRANQUILLITATIS</div>
-        <div class="hud-level-title">LEVEL 1: THE SILENT MOON</div>
+        <div id="hud-level-tag" class="hud-level-tag">SECTOR // MOON &bull; MARE TRANQUILLITATIS</div>
+        <div id="hud-level-title" class="hud-level-title">LEVEL 1: THE SILENT MOON</div>
         <div class="hud-mission-stats">
           <div class="stat-badge">
             <span class="label">MISSION DAY</span>
@@ -135,6 +137,8 @@ export class HUD {
 
     this.missionDayEl = this.container.querySelector('#hud-mission-day') as HTMLElement;
     this.progressCountEl = this.container.querySelector('#hud-artifact-progress') as HTMLElement;
+    this.levelTagEl = this.container.querySelector('#hud-level-tag') as HTMLElement;
+    this.levelTitleEl = this.container.querySelector('#hud-level-title') as HTMLElement;
     this.suitFillEl = this.container.querySelector('#suit-fill') as HTMLElement;
     this.energyFillEl = this.container.querySelector('#energy-fill') as HTMLElement;
     this.lunaFillEl = this.container.querySelector('#luna-fill') as HTMLElement;
@@ -157,6 +161,15 @@ export class HUD {
 
   public setOnMapClick(cb: () => void): void {
     this.onMapClickCallback = cb;
+  }
+
+  public setLevelInfo(sectorTag: string, levelTitle: string): void {
+    if (this.levelTagEl) {
+      this.levelTagEl.innerHTML = sectorTag;
+    }
+    if (this.levelTitleEl) {
+      this.levelTitleEl.textContent = levelTitle;
+    }
   }
 
   public show(): void {
