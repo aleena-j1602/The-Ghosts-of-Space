@@ -8,7 +8,7 @@ import { HUD } from '../ui/HUD.ts';
 import { MapUI } from '../ui/MapUI.ts';
 import { InvestigationUI } from '../ui/InvestigationUI.ts';
 import { OPENING_DIALOGUE, DialogueLine } from '../data/dialogue.ts';
-import { SpaceArtifact } from '../data/artifacts.ts';
+import type { ArtifactDefinition } from '../data/artifacts/Core/artifactTypes.ts';
 import { ResourceManager } from '../systems/ResourceManager.ts';
 import { ReportManager } from '../systems/ReportManager.ts';
 import { SaveManager } from '../systems/SaveManager.ts';
@@ -123,7 +123,7 @@ export class Game {
   }
 
   private setupInvestigationEvents(): void {
-    this.investigationUI.setOnCollectionComplete((artifact: SpaceArtifact) => {
+    this.investigationUI.setOnCollectionComplete((artifact: ArtifactDefinition) => {
       this.handleArtifactCollected(artifact);
     });
   }
@@ -222,7 +222,7 @@ export class Game {
     this.dialogueUI.startDialogue(lines);
   }
 
-  private handleArtifactCollected(artifact: SpaceArtifact): void {
+  private handleArtifactCollected(artifact: ArtifactDefinition): void {
     // 1. Mark in manager & game state
     const moonEnv = this.sceneManager.getMoonEnvironment();
     if (moonEnv) {
@@ -230,17 +230,20 @@ export class Game {
     }
 
     this.gameState.artifactsCollected += 1;
-    this.gameState.investigationPoints += artifact.points;
+    this.gameState.investigationPoints += artifact.rewards.basePoints;
     SaveManager.saveGame();
 
     // 2. Update HUD & Map
     this.hud.update();
     if (moonEnv) {
-      this.mapUI.setArtifacts(moonEnv.artifactManager.artifacts);
+      this.mapUI.setArtifacts(
+        moonEnv.artifactManager.artifacts,
+        (id) => moonEnv.artifactManager.getArtifactPosition(id)
+      );
     }
 
     if (this.statusDisplay) {
-      this.statusDisplay.textContent = `ARTIFACT RECOVERED: ${artifact.name.toUpperCase()} (+${artifact.points} PTS)`;
+      this.statusDisplay.textContent = `ARTIFACT RECOVERED: ${artifact.commonName.toUpperCase()} (+${artifact.rewards.basePoints} PTS)`;
       this.statusDisplay.style.color = '#f5b942';
     }
 
@@ -249,7 +252,7 @@ export class Game {
       {
         id: 'collect_1',
         speaker: 'LUNA',
-        text: `Splendid discovery, Explorer! All primary telemetry and structural logs for the ${artifact.name} are safely stored in our archives!`,
+        text: `Splendid discovery, Explorer! All primary telemetry and structural logs for the ${artifact.commonName} are safely stored in our archives!`,
         lunaExpression: 'happy',
       },
       {
@@ -306,7 +309,10 @@ export class Game {
 
         const moonEnv = this.sceneManager.getMoonEnvironment();
         if (moonEnv) {
-          this.mapUI.setArtifacts(moonEnv.artifactManager.artifacts);
+          this.mapUI.setArtifacts(
+            moonEnv.artifactManager.artifacts,
+            (id) => moonEnv.artifactManager.getArtifactPosition(id)
+          );
         }
       },
       (lunaAlertMsg: string) => {

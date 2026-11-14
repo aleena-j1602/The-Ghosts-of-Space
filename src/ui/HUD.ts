@@ -1,6 +1,6 @@
 import { GameState } from '../core/GameState.ts';
 import { Vector3 } from '@babylonjs/core';
-import { SpaceArtifact } from '../data/artifacts.ts';
+import type { ArtifactDefinition } from '../data/artifacts/Core/artifactTypes.ts';
 
 export class HUD {
   private container: HTMLElement;
@@ -184,7 +184,7 @@ export class HUD {
     }, 4500);
   }
 
-  public updateRadar(detected: SpaceArtifact | null, distance: number, signalStrength: number, canInteract: boolean): void {
+  public updateRadar(detected: ArtifactDefinition | null, distance: number, signalStrength: number, canInteract: boolean): void {
     if (detected) {
       this.radarWidget.classList.remove('hidden');
       this.radarDistanceEl.textContent = `${distance.toFixed(1)}m`;
@@ -192,7 +192,7 @@ export class HUD {
 
       if (canInteract) {
         this.interactPrompt.classList.remove('hidden');
-        this.interactNameEl.textContent = detected.name.toUpperCase();
+        this.interactNameEl.textContent = (detected.commonName || detected.officialName).toUpperCase();
       } else {
         this.interactPrompt.classList.add('hidden');
       }

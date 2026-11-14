@@ -1,13 +1,18 @@
-import { SpaceArtifact, ArtifactComponent } from '../data/artifacts.ts';
+import type {
+  ArtifactDefinition,
+  ArtifactComponent,
+  Challenge,
+  ChallengeOption,
+} from '../data/artifacts/Core/artifactTypes.ts';
 
 export class InvestigationUI {
   private container: HTMLElement;
   private scanModal!: HTMLElement;
   private investigateModal!: HTMLElement;
 
-  private currentArtifact: SpaceArtifact | null = null;
+  private currentArtifact: ArtifactDefinition | null = null;
   private challengeCompleted: boolean = false;
-  private onCollectionComplete?: (artifact: SpaceArtifact) => void;
+  private onCollectionComplete?: (artifact: ArtifactDefinition) => void;
 
   private audioCtx: AudioContext | null = null;
 
@@ -189,11 +194,11 @@ export class InvestigationUI {
     });
   }
 
-  public setOnCollectionComplete(cb: (artifact: SpaceArtifact) => void): void {
+  public setOnCollectionComplete(cb: (artifact: ArtifactDefinition) => void): void {
     this.onCollectionComplete = cb;
   }
 
-  public startScanSequence(artifact: SpaceArtifact, onScanComplete?: () => void): void {
+  public startScanSequence(artifact: ArtifactDefinition, onScanComplete?: () => void): void {
     this.currentArtifact = artifact;
     this.challengeCompleted = false;
 
@@ -209,7 +214,11 @@ export class InvestigationUI {
     const pctText = this.scanModal.querySelector('#scan-pct-text') as HTMLElement;
     const lunaText = this.scanModal.querySelector('#luna-scan-dialogue') as HTMLElement;
 
-    nameEl.textContent = `SCANNING: ${artifact.name.toUpperCase()}`;
+    const launchYear = artifact.dates.launch
+      ? new Date(artifact.dates.launch).getUTCFullYear()
+      : (artifact.dates.landing ? new Date(artifact.dates.landing).getUTCFullYear() : 1969);
+
+    nameEl.textContent = `SCANNING: ${artifact.commonName.toUpperCase()}`;
     progressFill.style.width = '0%';
     pctText.textContent = '0%';
     statusText.textContent = 'ACQUIRING HARDWARE SIGNATURE...';
@@ -224,7 +233,7 @@ export class InvestigationUI {
 
       if (progress === 40) {
         statusText.textContent = 'ANALYZING COMPONENT SCHEMATICS...';
-        lunaText.textContent = `"Telemetry match verified! De-scrambling historical telemetry logs from ${artifact.year}..."`;
+        lunaText.textContent = `"Telemetry match verified! De-scrambling historical records from ${launchYear}..."`;
       } else if (progress === 75) {
         statusText.textContent = 'RECONSTRUCTING ARCHIVAL RECORDS...';
         lunaText.textContent = `"Almost done! Structural integrity intact. Preparing investigation report."`;
@@ -242,26 +251,31 @@ export class InvestigationUI {
     }, 90);
   }
 
-  private openInvestigationInterface(artifact: SpaceArtifact): void {
+  private openInvestigationInterface(artifact: ArtifactDefinition): void {
     this.investigateModal.classList.remove('hidden');
+
+    const launchYear = artifact.dates.launch
+      ? new Date(artifact.dates.launch).getUTCFullYear()
+      : (artifact.dates.landing ? new Date(artifact.dates.landing).getUTCFullYear() : 1969);
 
     // Populate Dossier
     (this.investigateModal.querySelector('#inv-agency-tag') as HTMLElement).textContent =
-      `SPACE ARCHAEOLOGY // ${artifact.agency.toUpperCase()} &bull; ${artifact.level}`;
-    (this.investigateModal.querySelector('#inv-artifact-title') as HTMLElement).textContent = artifact.name.toUpperCase();
+      `SPACE ARCHAEOLOGY // ${artifact.agency.toUpperCase()} &bull; LEVEL ${artifact.level}`;
+    (this.investigateModal.querySelector('#inv-artifact-title') as HTMLElement).textContent = artifact.commonName.toUpperCase();
     (this.investigateModal.querySelector('#inv-subtitle') as HTMLElement).textContent =
-      `${artifact.locationName} &bull; Launched: ${artifact.year}`;
-    (this.investigateModal.querySelector('#inv-purpose') as HTMLElement).textContent = artifact.purpose;
-    (this.investigateModal.querySelector('#inv-history') as HTMLElement).textContent = artifact.historicalStory;
-    (this.investigateModal.querySelector('#inv-science') as HTMLElement).textContent = artifact.scientificImportance;
+      `${artifact.destination} &bull; Launched: ${launchYear}`;
+    (this.investigateModal.querySelector('#inv-purpose') as HTMLElement).textContent = artifact.objective;
+    (this.investigateModal.querySelector('#inv-history') as HTMLElement).textContent = artifact.description;
+    (this.investigateModal.querySelector('#inv-science') as HTMLElement).textContent =
+      artifact.scientificFindings.join(' ') || (artifact.educational?.takeaways ? artifact.educational.takeaways.join(' ') : artifact.archive.summary);
     (this.investigateModal.querySelector('#inv-status') as HTMLElement).textContent = artifact.currentStatus;
-    (this.investigateModal.querySelector('#inv-reward-pts') as HTMLElement).textContent = `+${artifact.points} POINTS`;
+    (this.investigateModal.querySelector('#inv-reward-pts') as HTMLElement).textContent = `+${artifact.rewards.basePoints} POINTS`;
 
     // Populate Components
     const tabsContainer = this.investigateModal.querySelector('#component-tabs') as HTMLElement;
     tabsContainer.innerHTML = '';
 
-    artifact.components.forEach((comp, idx) => {
+    artifact.components.forEach((comp: ArtifactComponent, idx: number) => {
       const btn = document.createElement('button');
       btn.className = `comp-tab-btn ${idx === 0 ? 'active' : ''}`;
       btn.textContent = comp.name;
@@ -287,45 +301,62 @@ export class InvestigationUI {
 
   private displayComponent(comp: ArtifactComponent): void {
     (this.investigateModal.querySelector('#comp-name') as HTMLElement).textContent = comp.name;
-    (this.investigateModal.querySelector('#comp-role') as HTMLElement).textContent = comp.role;
-    (this.investigateModal.querySelector('#comp-how') as HTMLElement).textContent = comp.howItWorked;
-    (this.investigateModal.querySelector('#comp-why') as HTMLElement).textContent = comp.whyItMattered;
+    (this.investigateModal.querySelector('#comp-role') as HTMLElement).textContent = `[${comp.type}] ${comp.functionPlain}`;
+    (this.investigateModal.querySelector('#comp-how') as HTMLElement).textContent = `Condition: ${comp.condition}. ${comp.historicalNote ?? comp.functionPlain}`;
+    (this.investigateModal.querySelector('#comp-why') as HTMLElement).textContent =
+      comp.historicalNote ?? 'Essential subsystem ensuring mission success and providing critical baseline telemetry.';
     this.playTone(480, 0.08);
   }
 
-  private renderChallenge(artifact: SpaceArtifact): void {
+  private renderChallenge(artifact: ArtifactDefinition): void {
     const qEl = this.investigateModal.querySelector('#challenge-question') as HTMLElement;
     const optContainer = this.investigateModal.querySelector('#challenge-options') as HTMLElement;
     const feedbackEl = this.investigateModal.querySelector('#challenge-feedback') as HTMLElement;
     const badgeEl = this.investigateModal.querySelector('#challenge-status-badge') as HTMLElement;
 
-    qEl.textContent = artifact.challenge.question;
+    const challenge = artifact.challenges && artifact.challenges.length > 0 ? artifact.challenges[0] : null;
+
+    if (!challenge) {
+      qEl.textContent = 'Hardware telemetry verified. Confirm archive entry.';
+      optContainer.innerHTML = '';
+      badgeEl.className = 'badge-verified';
+      badgeEl.textContent = 'VERIFIED';
+      this.challengeCompleted = true;
+      const btnCollect = this.investigateModal.querySelector('#btn-collect-artifact') as HTMLButtonElement;
+      btnCollect.disabled = false;
+      return;
+    }
+
+    qEl.textContent = challenge.instructions || challenge.objective || challenge.title;
     optContainer.innerHTML = '';
     feedbackEl.className = 'challenge-feedback hidden';
     feedbackEl.innerHTML = '';
     badgeEl.className = 'badge-pending';
     badgeEl.textContent = 'PENDING VERIFICATION';
 
-    artifact.challenge.options.forEach((optText, idx) => {
+    const options = challenge.options || [];
+    options.forEach((opt: ChallengeOption, idx: number) => {
       const optBtn = document.createElement('button');
       optBtn.className = 'challenge-opt-btn';
-      optBtn.innerHTML = `<span class="opt-num">${String.fromCharCode(65 + idx)}</span> <span class="opt-txt">${optText}</span>`;
+      optBtn.innerHTML = `<span class="opt-num">${String.fromCharCode(65 + idx)}</span> <span class="opt-txt">${opt.text}</span>`;
 
       optBtn.addEventListener('click', () => {
-        this.handleSelectOption(idx, artifact);
+        this.handleSelectOption(opt, idx, challenge);
       });
 
       optContainer.appendChild(optBtn);
     });
   }
 
-  private handleSelectOption(selectedIndex: number, artifact: SpaceArtifact): void {
+  private handleSelectOption(selectedOpt: ChallengeOption, selectedIndex: number, challenge: Challenge): void {
     const optButtons = this.investigateModal.querySelectorAll('.challenge-opt-btn');
     const feedbackEl = this.investigateModal.querySelector('#challenge-feedback') as HTMLElement;
     const badgeEl = this.investigateModal.querySelector('#challenge-status-badge') as HTMLElement;
     const btnCollect = this.investigateModal.querySelector('#btn-collect-artifact') as HTMLButtonElement;
 
-    const isCorrect = selectedIndex === artifact.challenge.correctIndex;
+    const isCorrect = Array.isArray(challenge.correctAnswer)
+      ? challenge.correctAnswer.includes(selectedOpt.id)
+      : Object.values(challenge.correctAnswer).includes(selectedOpt.id);
 
     optButtons.forEach((btn, idx) => {
       btn.classList.remove('selected', 'correct', 'incorrect');
@@ -346,7 +377,7 @@ export class InvestigationUI {
       feedbackEl.className = 'challenge-feedback feedback-correct';
       feedbackEl.innerHTML = `
         <div class="feedback-title">✓ CORRECT HISTORICAL SPECIFICATION</div>
-        <p>${artifact.challenge.explanation}</p>
+        <p>${challenge.explanation}</p>
       `;
 
       btnCollect.disabled = false;
@@ -358,10 +389,11 @@ export class InvestigationUI {
       badgeEl.className = 'badge-incorrect';
       badgeEl.textContent = 'TRY AGAIN';
 
+      const hintText = challenge.hints && challenge.hints.length > 0 ? challenge.hints[0] : 'Review the mission historical dossier.';
       feedbackEl.className = 'challenge-feedback feedback-incorrect';
       feedbackEl.innerHTML = `
         <div class="feedback-title">✕ INCORRECT SPECIFICATION</div>
-        <p><strong>Clue from Luna:</strong> ${artifact.challenge.hint}</p>
+        <p><strong>Clue from Luna:</strong> ${hintText}</p>
       `;
 
       btnCollect.disabled = true;

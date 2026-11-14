@@ -1,5 +1,5 @@
 import { Vector3 } from '@babylonjs/core';
-import { SpaceArtifact } from '../data/artifacts.ts';
+import type { ArtifactDefinition } from '../data/artifacts/Core/artifactTypes.ts';
 
 export class MapUI {
   private container: HTMLElement;
@@ -8,7 +8,8 @@ export class MapUI {
   private isVisible: boolean = false;
   private closeBtn!: HTMLElement;
 
-  private artifacts: SpaceArtifact[] = [];
+  private artifacts: ArtifactDefinition[] = [];
+  private positionResolver?: (id: string) => { x: number; z: number } | undefined;
   private playerPos: Vector3 = new Vector3(0, 0, 0);
   private playerForward: Vector3 = new Vector3(0, 0, 1);
   private detectedArtifactId: string | null = null;
@@ -80,9 +81,26 @@ export class MapUI {
     });
   }
 
-  public setArtifacts(artifacts: SpaceArtifact[]): void {
+  public setArtifacts(
+    artifacts: ArtifactDefinition[],
+    positionResolver?: (id: string) => { x: number; z: number } | undefined
+  ): void {
     this.artifacts = artifacts;
+    if (positionResolver) {
+      this.positionResolver = positionResolver;
+    }
     this.updateTargetList();
+  }
+
+  private getArtifactCoords(art: ArtifactDefinition): { x: number; z: number } {
+    if (this.positionResolver) {
+      const p = this.positionResolver(art.id);
+      if (p) return { x: p.x, z: p.z };
+    }
+    if (art.id === 'a11-lm5-descent') return { x: 32, z: 22 };
+    if (art.id === 'a12-lm6-ascent') return { x: -28, z: 32 };
+    if (art.id === 'a15-lm10-ascent') return { x: 14, z: -38 };
+    return { x: 0, z: 0 };
   }
 
   public setDetectedArtifact(id: string | null): void {
@@ -135,12 +153,14 @@ export class MapUI {
         const isDetected = this.detectedArtifactId === art.id;
         const statusClass = art.isCollected ? 'status-secured' : isDetected ? 'status-detected' : 'status-undiscovered';
         const statusText = art.isCollected ? 'SECURED' : isDetected ? 'LUNA DETECTED' : 'APPROX. COORDS';
+        const coords = this.getArtifactCoords(art);
+        const year = art.dates.launch ? new Date(art.dates.launch).getUTCFullYear() : (art.dates.landing ? new Date(art.dates.landing).getUTCFullYear() : 1969);
 
         return `
           <div class="target-card ${statusClass}">
             <div class="target-info">
-              <span class="target-name">${art.name}</span>
-              <span class="target-coords">[X: ${art.coordinates.x}, Z: ${art.coordinates.z}] &bull; ${art.year}</span>
+              <span class="target-name">${art.commonName}</span>
+              <span class="target-coords">[X: ${coords.x.toFixed(0)}, Z: ${coords.z.toFixed(0)}] &bull; ${year} &bull; ${art.agency.split('—')[0].trim()}</span>
             </div>
             <span class="target-badge">${statusText}</span>
           </div>
@@ -198,12 +218,13 @@ export class MapUI {
 
     this.ctx.fillStyle = '#22c55e';
     this.ctx.font = '10px Consolas, monospace';
-    this.ctx.fillText('SHELTER (0,0)', centerX + 10, centerY + 4);
+    this.ctx.fillText('HABITAT SHELTER (0,0)', centerX + 10, centerY + 4);
 
     // 3. Artifact markers
     this.artifacts.forEach((art) => {
-      const ax = centerX + art.coordinates.x * mapScale;
-      const ay = centerY - art.coordinates.z * mapScale;
+      const coords = this.getArtifactCoords(art);
+      const ax = centerX + coords.x * mapScale;
+      const ay = centerY - coords.z * mapScale;
 
       if (art.isCollected) {
         // Collected: Green Checkmark / Hexagon
@@ -214,7 +235,7 @@ export class MapUI {
 
         this.ctx.fillStyle = '#8b9bb0';
         this.ctx.font = '9px Consolas, monospace';
-        this.ctx.fillText(`${art.name} (SECURED)`, ax + 8, ay + 3);
+        this.ctx.fillText(`${art.commonName} (SECURED)`, ax + 8, ay + 3);
       } else if (this.detectedArtifactId === art.id) {
         // Pinging / Detected by Luna: Glowing cyan pulsing ring
         const pulse = 6 + Math.sin(performance.now() * 0.006) * 4;
@@ -231,7 +252,7 @@ export class MapUI {
 
         this.ctx.fillStyle = '#46d9e8';
         this.ctx.font = '10px Consolas, monospace';
-        this.ctx.fillText(`SIGNAL: ${art.name}`, ax + 10, ay + 3);
+        this.ctx.fillText(`SIGNAL: ${art.commonName}`, ax + 10, ay + 3);
       } else {
         // Known Coordinates: Amber diamond
         this.ctx.fillStyle = '#f5b942';
@@ -241,7 +262,7 @@ export class MapUI {
 
         this.ctx.fillStyle = '#8b9bb0';
         this.ctx.font = '9px Consolas, monospace';
-        this.ctx.fillText(art.name, ax + 8, ay + 3);
+        this.ctx.fillText(art.commonName, ax + 8, ay + 3);
       }
     });
 

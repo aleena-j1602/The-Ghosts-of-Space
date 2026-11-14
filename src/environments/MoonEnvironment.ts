@@ -9,10 +9,10 @@ import {
   MeshBuilder,
   StandardMaterial,
   PBRMaterial,
-  ParticleSystem,
   Texture,
   Mesh,
   AbstractMesh,
+  TransformNode,
   SceneLoader,
 } from '@babylonjs/core';
 
@@ -28,6 +28,7 @@ import { InputManager } from '../core/InputManager.ts';
 
 export class MoonEnvironment {
   public scene: Scene;
+
   public astronaut!: AstronautCharacter;
   public playerController!: PlayerController;
   public camera!: ThirdPersonCamera;
@@ -35,18 +36,23 @@ export class MoonEnvironment {
   public lunaDetection!: LunaDetection;
   public artifactManager!: ArtifactManager;
 
-  // Space Shuttle
+  // Space Shuttle Landing Site
+  private landerRoot!: TransformNode;
   private shuttleRoot: AbstractMesh | null = null;
-  private shuttleLoaded: boolean = false;
-  private shuttleGroundOffset: number = 0;
+
+  private shuttleGroundOffset = 0;
+  private shuttleLoaded = false;
 
   private earthMesh!: Mesh;
-  private landingThrusterParticles: ParticleSystem | null = null;
 
-  // Landing cinematic state
-  public isLandingCinematic: boolean = false;
-  private landingProgress: number = 0;
+  // Landing cinematic
+  public isLandingCinematic = false;
+
+  private landingProgress = 0;
   private onLandingCompleteCallback?: () => void;
+  private landingCompleted = false;
+
+  private disposed = false;
 
   public currentDetectionState: DetectionState = {
     detectedArtifact: null,
@@ -58,12 +64,18 @@ export class MoonEnvironment {
   constructor(
     engine: Engine,
     inputManager: InputManager,
-    playLandingCinematic: boolean = true,
+    playLandingCinematic = true,
     onLandingComplete?: () => void,
     onLunaAlert?: (message: string) => void
   ) {
     this.scene = new Scene(engine);
-    this.scene.clearColor = new Color4(0.01, 0.02, 0.04, 1.0);
+
+    this.scene.clearColor = new Color4(
+      0.01,
+      0.02,
+      0.04,
+      1
+    );
 
     this.isLandingCinematic = playLandingCinematic;
     this.onLandingCompleteCallback = onLandingComplete;
@@ -73,16 +85,26 @@ export class MoonEnvironment {
     this.setupEarthInSky();
     this.setupLunarTerrain();
 
-    // Load the Space Shuttle instead of the procedural lander
-    void this.loadSpaceShuttle();
+    this.setupLandingSiteShelter();
 
-    this.setupPlayerAndCompanion(inputManager, onLunaAlert);
+    this.setupPlayerAndCompanion(
+      inputManager,
+      onLunaAlert
+    );
+
     this.setupArtifacts();
 
     if (this.isLandingCinematic) {
       this.initLandingCinematic();
     } else {
-      this.astronaut.setPosition(new Vector3(0, 0, 4.5));
+      this.astronaut.setPosition(
+        new Vector3(0, 0, 4.5)
+      );
+
+      this.lunaFollower.setPosition(
+        new Vector3(1.2, 1.8, 3.8)
+      );
+
       this.playerController.setEnabled(true);
     }
 
@@ -139,7 +161,7 @@ export class MoonEnvironment {
       );
 
       const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos(Math.random());
+      const phi = Math.acos(2 * Math.random() - 1);
       const radius = 220 + Math.random() * 30;
 
       star.position = new Vector3(
@@ -148,6 +170,7 @@ export class MoonEnvironment {
         radius * Math.sin(phi) * Math.sin(theta)
       );
 
+      star.material = starMaterial;
       star.freezeWorldMatrix();
     }
   }
@@ -159,11 +182,18 @@ export class MoonEnvironment {
   private setupEarthInSky(): void {
     this.earthMesh = MeshBuilder.CreateSphere(
       'skyEarth',
-      { diameter: 24, segments: 24 },
+      {
+        diameter: 24,
+        segments: 24,
+      },
       this.scene
     );
 
-    this.earthMesh.position = new Vector3(-80, 55, 140);
+    this.earthMesh.position = new Vector3(
+      -80,
+      55,
+      140
+    );
 
     const earthMat = new StandardMaterial(
       'skyEarthMat',
@@ -178,7 +208,7 @@ export class MoonEnvironment {
   }
 
   // --------------------------------------------------
-  // LUNAR TERRAIN WITH PBR MOON TEXTURES
+  // LUNAR TERRAIN
   // --------------------------------------------------
 
   private setupLunarTerrain(): void {
@@ -215,7 +245,10 @@ export class MoonEnvironment {
     const textures = [
       moonMaterial.albedoTexture,
       moonMaterial.bumpTexture,
-    ].filter((texture): texture is Texture => texture instanceof Texture);
+    ].filter(
+      (texture): texture is Texture =>
+        texture instanceof Texture
+    );
 
     textures.forEach((texture) => {
       texture.uScale = 8;
@@ -224,10 +257,7 @@ export class MoonEnvironment {
       texture.wrapV = Texture.WRAP_ADDRESSMODE;
     });
 
-    // ------------------------------
-    // CRATERS
-    // ------------------------------
-
+    // Craters
     const craterMat = new StandardMaterial(
       'craterMat',
       this.scene
@@ -256,7 +286,12 @@ export class MoonEnvironment {
         this.scene
       );
 
-      rim.position = new Vector3(cp.x, 0.2, cp.z);
+      rim.position = new Vector3(
+        cp.x,
+        0.2,
+        cp.z
+      );
+
       rim.material = craterMat;
       rim.freezeWorldMatrix();
 
@@ -270,19 +305,43 @@ export class MoonEnvironment {
       );
 
       floor.rotation.x = Math.PI / 2;
-      floor.position = new Vector3(cp.x, 0.02, cp.z);
+
+      floor.position = new Vector3(
+        cp.x,
+        0.02,
+        cp.z
+      );
+
       floor.material = craterMat;
       floor.freezeWorldMatrix();
     });
   }
 
   // --------------------------------------------------
-  // SPACE SHUTTLE GLB
-  // REPLACES THE PROCEDURAL LANDER
+  // SPACE SHUTTLE LANDING SITE
+  // --------------------------------------------------
+
+  private setupLandingSiteShelter(): void {
+    this.landerRoot = new TransformNode(
+      'landerRoot',
+      this.scene
+    );
+
+    // Keep the parent at ground level.
+    // The shuttle itself will move during landing.
+    this.landerRoot.position = Vector3.Zero();
+
+    void this.loadSpaceShuttle();
+  }
+
+  // --------------------------------------------------
+  // LOAD SPACE SHUTTLE GLB
   // --------------------------------------------------
 
   private async loadSpaceShuttle(): Promise<void> {
     try {
+      console.log('Loading Space Shuttle...');
+
       const result = await SceneLoader.ImportMeshAsync(
         '',
         '/models/',
@@ -290,21 +349,34 @@ export class MoonEnvironment {
         this.scene
       );
 
+      if (this.disposed) {
+        result.meshes.forEach((mesh) => mesh.dispose());
+
+        result.transformNodes.forEach((node) => {
+          node.dispose();
+        });
+
+        return;
+      }
+
       const shuttle = result.meshes[0];
 
       if (!shuttle) {
-        throw new Error('No root mesh found in the Space Shuttle GLB.');
+        throw new Error(
+          'No root mesh found in the Space Shuttle GLB.'
+        );
       }
 
+      // Use the imported mesh directly.
       this.shuttleRoot = shuttle;
 
-      // Initial position
+      // Original working position.
       shuttle.position = new Vector3(0, 0, 0);
 
-      // Adjust model size here if needed
+      // Preserve original model scale.
       shuttle.scaling = new Vector3(1, 1, 1);
 
-      // Shuttle orientation
+      // Original working orientation.
       shuttle.rotation = new Vector3(
         0,
         Math.PI / 2,
@@ -313,16 +385,20 @@ export class MoonEnvironment {
 
       shuttle.setEnabled(true);
 
-      // Calculate the shuttle's ground alignment
+      // Calculate the shuttle's ground alignment.
       shuttle.computeWorldMatrix(true);
 
       const bounds = shuttle.getHierarchyBoundingVectors(true);
 
       this.shuttleGroundOffset = -bounds.min.y;
 
-      // Start above the surface if the landing cinematic is enabled
+      // Determine starting height.
       const startingHeight = this.isLandingCinematic ? 22 : 0;
 
+      // Attach the shuttle to the stationary landing root.
+      shuttle.parent = this.landerRoot;
+
+      // Position the shuttle above the surface.
       shuttle.position.y =
         this.shuttleGroundOffset + startingHeight;
 
@@ -330,31 +406,21 @@ export class MoonEnvironment {
 
       this.shuttleLoaded = true;
 
-      // Attach landing particles to the shuttle
-      if (this.landingThrusterParticles) {
-        this.landingThrusterParticles.emitter = shuttle;
-        this.landingThrusterParticles.start();
-      }
-
       console.log('Space Shuttle loaded successfully.');
+      console.log(
+        'Shuttle ground offset:',
+        this.shuttleGroundOffset
+      );
 
     } catch (error) {
-      console.error('Failed to load Space Shuttle:', error);
+      console.error(
+        'Failed to load Space Shuttle:',
+        error
+      );
 
-      // Prevent the game from getting stuck if loading fails
+      // Prevent the game from getting stuck if loading fails.
       if (this.isLandingCinematic) {
-        this.isLandingCinematic = false;
-
-        this.astronaut.root.setEnabled(true);
-        this.lunaFollower.luna.root.setEnabled(true);
-
-        this.astronaut.setPosition(new Vector3(0, 0, 4.5));
-
-        this.playerController.setEnabled(true);
-
-        if (this.onLandingCompleteCallback) {
-          this.onLandingCompleteCallback();
-        }
+        this.completeLanding();
       }
     }
   }
@@ -409,7 +475,13 @@ export class MoonEnvironment {
   // --------------------------------------------------
 
   private setupArtifacts(): void {
-    this.artifactManager = new ArtifactManager(this.scene);
+    this.artifactManager = new ArtifactManager(
+      this.scene
+    );
+
+    console.log(
+      `Loaded ${this.artifactManager.getTotalCount()} Moon artifacts.`
+    );
   }
 
   // --------------------------------------------------
@@ -423,41 +495,59 @@ export class MoonEnvironment {
     this.camera.camera.target = new Vector3(0, 4, 0);
     this.camera.camera.radius = 24;
     this.camera.camera.beta = Math.PI / 3;
+  }
 
-    this.landingThrusterParticles = new ParticleSystem(
-      'shuttleLandingParticles',
-      200,
-      this.scene
+  // --------------------------------------------------
+  // LANDING COMPLETION
+  // --------------------------------------------------
+
+  private completeLanding(): void {
+    if (this.landingCompleted) {
+      return;
+    }
+
+    this.landingCompleted = true;
+    this.isLandingCinematic = false;
+
+    // Place shuttle on the lunar surface.
+    if (this.shuttleLoaded && this.shuttleRoot) {
+      this.shuttleRoot.position.y =
+        this.shuttleGroundOffset;
+
+      this.shuttleRoot.computeWorldMatrix(true);
+    }
+
+    this.astronaut.root.setEnabled(true);
+
+    this.astronaut.setPosition(
+      new Vector3(0, 0, 4.5)
     );
 
-    this.landingThrusterParticles.particleTexture = new Texture(
-      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
-      this.scene
+    this.lunaFollower.luna.root.setEnabled(true);
+
+    this.lunaFollower.setPosition(
+      new Vector3(1.2, 1.8, 3.8)
     );
 
-    this.landingThrusterParticles.color1 =
-      new Color4(0.95, 0.7, 0.2, 1.0);
+    this.lunaFollower.setExpression('happy');
 
-    this.landingThrusterParticles.color2 =
-      new Color4(0.27, 0.85, 0.91, 0.8);
+    this.restoreGameplayCamera();
 
-    this.landingThrusterParticles.colorDead =
-      new Color4(0.1, 0.1, 0.1, 0.0);
+    this.playerController.setEnabled(true);
 
-    this.landingThrusterParticles.minSize = 0.4;
-    this.landingThrusterParticles.maxSize = 1.1;
-    this.landingThrusterParticles.minLifeTime = 0.3;
-    this.landingThrusterParticles.maxLifeTime = 0.7;
-    this.landingThrusterParticles.emitRate = 120;
+    this.onLandingCompleteCallback?.();
+  }
 
-    this.landingThrusterParticles.direction1 =
-      new Vector3(-0.4, -4.0, -0.4);
+  private restoreGameplayCamera(): void {
+    this.camera.camera.radius = 6.5;
+    this.camera.camera.beta = Math.PI / 2.7;
+    this.camera.camera.alpha = -Math.PI / 2;
 
-    this.landingThrusterParticles.direction2 =
-      new Vector3(0.4, -5.0, 0.4);
-
-    this.landingThrusterParticles.minEmitPower = 3;
-    this.landingThrusterParticles.maxEmitPower = 6;
+    this.camera.camera.target = new Vector3(
+      0,
+      1.5,
+      0
+    );
   }
 
   // --------------------------------------------------
@@ -466,85 +556,63 @@ export class MoonEnvironment {
 
   private setupGameLoop(): void {
     this.scene.onBeforeRenderObservable.add(() => {
+      if (this.disposed) {
+        return;
+      }
+
       const dt =
         this.scene.getEngine().getDeltaTime() * 0.001;
 
+      // Earth rotation.
       if (this.earthMesh) {
         this.earthMesh.rotation.y += dt * 0.02;
       }
 
-      // 1. Landing cinematic
+      // Landing cinematic.
       if (this.isLandingCinematic) {
-
-        // Wait until the Space Shuttle has loaded
-        if (!this.shuttleLoaded || !this.shuttleRoot) {
-          return;
-        }
-
         this.landingProgress += dt * 0.32;
 
-        const t = Math.min(this.landingProgress, 1.0);
+        const t = Math.min(
+          this.landingProgress,
+          1
+        );
+
         const ease = 1 - Math.pow(1 - t, 2);
 
-        // Move shuttle from the sky to the lunar surface
-        this.shuttleRoot.position.y =
-          this.shuttleGroundOffset + 22 * (1 - ease);
+        // Move only the shuttle, not its parent.
+        if (this.shuttleLoaded && this.shuttleRoot) {
+          this.shuttleRoot.position.y =
+            this.shuttleGroundOffset + 22 * (1 - ease);
+
+          this.shuttleRoot.computeWorldMatrix(true);
+        }
 
         this.camera.camera.target = new Vector3(
           0,
-          this.shuttleRoot.position.y + 2.5,
+          22 * (1 - ease) + 2.5,
           0
         );
 
         this.camera.camera.alpha += dt * 0.12;
 
-        if (t >= 1.0) {
-          this.shuttleRoot.position.y = this.shuttleGroundOffset;
-
-          this.isLandingCinematic = false;
-
-          if (this.landingThrusterParticles) {
-            this.landingThrusterParticles.stop();
-          }
-
-          // Show astronaut
-          this.astronaut.root.setEnabled(true);
-
-          this.astronaut.setPosition(
-            new Vector3(0, 0, 4.5)
-          );
-
-          // Show Luna
-          this.lunaFollower.luna.root.setEnabled(true);
-
-          this.lunaFollower.setPosition(
-            new Vector3(1.2, 1.8, 3.8)
-          );
-
-          this.lunaFollower.setExpression('happy');
-
-          // Restore gameplay camera
-          this.camera.camera.radius = 6.5;
-          this.camera.camera.beta = Math.PI / 2.7;
-          this.camera.camera.alpha = -Math.PI / 2;
-
-          // Enable player controls
-          this.playerController.setEnabled(true);
-
-          if (this.onLandingCompleteCallback) {
-            this.onLandingCompleteCallback();
-          }
+        if (t >= 1) {
+          this.completeLanding();
         }
 
         return;
       }
 
-      // 2. Active gameplay
+      // Active gameplay.
       this.playerController.update(dt);
 
-      const playerPos = this.playerController.getPosition();
-      const playerForward = this.playerController.getForward();
-      const isMoving = this.playerController.isMoving();
+      const playerPos =
+        this.playerController.getPosition();
+
+      const playerForward =
+        this.playerController.getForward();
+
+      const isMoving =
+        this.playerController.isMoving();
 
       this.lunaFollower.update(
         dt,
@@ -555,12 +623,27 @@ export class MoonEnvironment {
 
       this.artifactManager.update(dt);
 
-      // 3. Proximity detection
-      this.currentDetectionState = this.lunaDetection.update(
-        playerPos,
-        this.artifactManager.artifacts
-      );
+      // Proximity detection.
+      this.currentDetectionState =
+        this.lunaDetection.update(
+          playerPos,
+          this.artifactManager.artifacts,
+          (id) =>
+            this.artifactManager.getArtifactPosition(id)
+        );
     });
+  }
+
+  // --------------------------------------------------
+  // PUBLIC ACCESSORS
+  // --------------------------------------------------
+
+  public getCurrentDetectionState(): DetectionState {
+    return this.currentDetectionState;
+  }
+
+  public getArtifactManager(): ArtifactManager {
+    return this.artifactManager;
   }
 
   // --------------------------------------------------
@@ -568,14 +651,24 @@ export class MoonEnvironment {
   // --------------------------------------------------
 
   public dispose(): void {
-    if (this.landingThrusterParticles) {
-      this.landingThrusterParticles.dispose();
+    if (this.disposed) {
+      return;
     }
 
-    this.artifactManager.dispose();
-    this.astronaut.dispose();
-    this.lunaFollower.dispose();
-    this.camera.dispose();
+    this.disposed = true;
+
+    if (this.landerRoot) {
+      this.landerRoot.dispose(false, true);
+    }
+
+    this.shuttleRoot = null;
+    this.shuttleLoaded = false;
+
+    this.artifactManager?.dispose();
+    this.astronaut?.dispose();
+    this.lunaFollower?.dispose();
+    this.camera?.dispose();
+
     this.scene.dispose();
   }
 }

@@ -1,6 +1,6 @@
 import { GameState } from '../core/GameState.ts';
-import { ARTIFACTS_DATA } from '../data/artifacts.ts';
-import { DialogueLine } from '../data/dialogue.ts';
+import { ARTIFACTS_DATA } from '../data/artifacts/index.ts';
+import type { DialogueLine } from '../data/dialogue.ts';
 
 export interface RechargeStory {
   artifactId: string;
@@ -27,7 +27,7 @@ export class RechargeManager {
   private initStories(): void {
     // 1. Apollo 11 Eagle Story: 1202 Alarm & The Low Fuel Touchdown
     this.stories['apollo11_eagle'] = {
-      artifactId: 'apollo11_eagle',
+      artifactId: 'a11-lm5-descent',
       artifactName: 'Apollo 11 Eagle Descent Stage',
       storyDialogue: [
         {
@@ -72,48 +72,48 @@ export class RechargeManager {
       ],
     };
 
-    // 2. Apollo Lunar Rover Story: The Duct Tape Fender Fix
-    this.stories['apollo_rover'] = {
-      artifactId: 'apollo_rover',
-      artifactName: 'Apollo Lunar Roving Vehicle',
+    // 2. Apollo 15 Falcon & Hadley Plain: First Rover & Galileo Experiment
+    this.stories['apollo15_falcon'] = {
+      artifactId: 'a15-lm10-ascent',
+      artifactName: 'Apollo 15 Falcon Ascent Stage & Hadley Plain',
       storyDialogue: [
         {
-          id: 'rover_story_1',
+          id: 'falcon_story_1',
           speaker: 'LUNA',
-          text: "I love the Lunar Rover! But did you know that on Apollo 17, Gene Cernan accidentally sheared off one of the rear fenders with a geology hammer?",
+          text: "You know, Apollo 15's Falcon didn't just land at Hadley Rille—it brought the very first Lunar Roving Vehicle to another world!",
           lunaExpression: 'curious',
         },
         {
-          id: 'rover_story_2',
+          id: 'falcon_story_2',
           speaker: 'PLAYER',
-          text: "A broken fender on the Moon? Was that dangerous?",
+          text: "And didn't Commander Scott perform a famous physics demonstration there?",
         },
         {
-          id: 'rover_story_3',
+          id: 'falcon_story_3',
           speaker: 'LUNA',
-          text: "Extremely! In 1/6th gravity, the mesh tires hurled gigantic 'rooster tails' of abrasive, black lunar dust over the astronauts and solar radiators. The batteries were rapidly overheating.",
+          text: "He did! In front of the television camera, Dave Scott held up a 1.3-kilogram geology hammer and a 30-gram falcon feather.",
           lunaExpression: 'alert',
         },
         {
-          id: 'rover_story_4',
+          id: 'falcon_story_4',
           speaker: 'PLAYER',
-          text: "How did they fix it without a garage?",
+          text: "Testing Galileo Galilei's law of falling bodies from 400 years earlier.",
         },
         {
-          id: 'rover_story_5',
+          id: 'falcon_story_5',
           speaker: 'LUNA',
-          text: "With humanity's greatest invention: gray duct tape! Engineers in Houston stayed up all night and radioed a design using four laminated map sheets taped together and clamped onto the fender.",
+          text: "Precisely! In the lunar vacuum with zero air resistance, he released them both. They accelerated identically and struck the regolith at the exact same fraction of a second!",
           lunaExpression: 'happy',
         },
         {
-          id: 'rover_story_6',
+          id: 'falcon_story_6',
           speaker: 'PLAYER',
-          text: "Four paper maps and tape saved a multi-million dollar rover.",
+          text: "'Mr. Galileo was correct in his findings.'",
         },
         {
-          id: 'rover_story_7',
+          id: 'falcon_story_7',
           speaker: 'LUNA',
-          text: "Proof that good old-fashioned ingenuity is just as vital as rocket science. Next time you repair my sensors, remember: I accept high-grade duct tape!",
+          text: "Pure poetry. And after liftoff, they deliberately impacted Falcon's ascent stage into the Moon to provide seismic shockwaves for ALSEP stations. Truly dedicated science!",
           lunaExpression: 'witty',
         },
       ],
@@ -121,7 +121,7 @@ export class RechargeManager {
 
     // 3. Apollo ALSEP Story: The Moon Ringing Like a Bell
     this.stories['apollo_alsep'] = {
-      artifactId: 'apollo_alsep',
+      artifactId: 'a12-lm6-ascent',
       artifactName: 'ALSEP Scientific Package',
       storyDialogue: [
         {
@@ -169,7 +169,8 @@ export class RechargeManager {
 
   public getNextStoryToTell(): RechargeStory | null {
     // Find a collected artifact that hasn't had its bedtime recharge story told yet
-    for (const [artId, story] of Object.entries(this.stories)) {
+    for (const story of Object.values(this.stories)) {
+      const artId = story.artifactId;
       const art = ARTIFACTS_DATA[artId];
       if (art?.isCollected && !this.toldStoryIds.has(artId)) {
         return story;

@@ -1,5 +1,5 @@
 import { GameState } from '../core/GameState.ts';
-import { ARTIFACTS_DATA } from '../data/artifacts.ts';
+import { ARTIFACTS_DATA } from '../data/artifacts/index.ts';
 
 export interface SavedGameData {
   currentLevel: string;
@@ -76,6 +76,9 @@ export class SaveManager {
       gs.resources = { ...data.resources };
 
       // Restore artifact collection states
+      Object.values(ARTIFACTS_DATA).forEach((artifact) => {
+        artifact.isCollected = false;
+      });
       data.collectedArtifactIds.forEach((id) => {
         if (ARTIFACTS_DATA[id]) {
           ARTIFACTS_DATA[id].isCollected = true;

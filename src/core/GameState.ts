@@ -19,7 +19,7 @@ export class GameState {
 
   public currentLevel: GameLevel = GameLevel.OPENING_CINEMATIC;
   public missionDay: number = 1;
-  public maxMissionDays: number = 14;
+  public maxMissionDays: number = 10;
   public artifactsCollected: number = 0;
   public recoveryTarget: number = 3;
   public investigationPoints: number = 0;

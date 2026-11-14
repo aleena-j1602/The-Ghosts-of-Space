@@ -1,7 +1,7 @@
 import { GameState } from '../core/GameState.ts';
-import { ARTIFACTS_DATA } from '../data/artifacts.ts';
+import { ARTIFACTS_DATA } from '../data/artifacts/index.ts';
 import { DialogueUI } from '../ui/DialogueUI.ts';
-import { DialogueLine } from '../data/dialogue.ts';
+import type { DialogueLine } from '../data/dialogue.ts';
 
 export class ReportManager {
   private static instance: ReportManager;

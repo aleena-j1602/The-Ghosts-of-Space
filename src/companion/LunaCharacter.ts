@@ -337,6 +337,5 @@ export class LunaCharacter {
   // Dispose character
   public dispose(): void {
     this.root.dispose();
-    this.scene.dispose;
   }
 }

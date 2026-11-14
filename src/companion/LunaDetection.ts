@@ -1,9 +1,9 @@
 import { Vector3 } from '@babylonjs/core';
 import { LunaFollower } from './LunaFollower.ts';
-import { SpaceArtifact } from '../data/artifacts.ts';
+import type { ArtifactDefinition } from '../data/artifacts/Core/artifactTypes.ts';
 
 export interface DetectionState {
-  detectedArtifact: SpaceArtifact | null;
+  detectedArtifact: ArtifactDefinition | null;
   distance: number;
   signalStrength: number; // 0 to 1
   canInteract: boolean;
@@ -13,7 +13,7 @@ export class LunaDetection {
   private lunaFollower: LunaFollower;
   private detectionRadius: number = 32.0;
   private interactRadius: number = 4.8;
-  private currentDetected: SpaceArtifact | null = null;
+  private currentDetected: ArtifactDefinition | null = null;
   private hasAlertedForCurrent: boolean = false;
 
   // Audio radar ping
@@ -68,14 +68,26 @@ export class LunaDetection {
     }
   }
 
-  public update(playerPos: Vector3, artifacts: SpaceArtifact[]): DetectionState {
-    let closestArtifact: SpaceArtifact | null = null;
+  public update(
+    playerPos: Vector3,
+    artifacts: ArtifactDefinition[],
+    getPosition?: (id: string) => Vector3 | undefined
+  ): DetectionState {
+    let closestArtifact: ArtifactDefinition | null = null;
     let minDistance = Infinity;
 
     for (const art of artifacts) {
       if (art.isCollected) continue;
 
-      const artPos = new Vector3(art.coordinates.x, art.coordinates.y, art.coordinates.z);
+      let artPos: Vector3 | undefined = getPosition?.(art.id);
+      if (!artPos) {
+        // Fallback default coordinates if resolver is not provided
+        if (art.id === 'a11-lm5-descent') artPos = new Vector3(32, 0, 22);
+        else if (art.id === 'a12-lm6-ascent') artPos = new Vector3(-28, 0, 32);
+        else if (art.id === 'a15-lm10-ascent') artPos = new Vector3(14, 0, -38);
+        else artPos = new Vector3(0, 0, 0);
+      }
+
       const dist = Vector3.Distance(playerPos, artPos);
 
       if (dist < minDistance) {
