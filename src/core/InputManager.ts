@@ -1,25 +1,28 @@
 export class InputManager {
-  private keysDown: Set<string> = new Set();
+  private keyStates: Map<string, boolean> = new Map();
+  private onKeyDownBound: (e: KeyboardEvent) => void;
+  private onKeyUpBound: (e: KeyboardEvent) => void;
 
   constructor() {
-    this.initListeners();
-  }
+    this.onKeyDownBound = (e: KeyboardEvent) => {
+      this.keyStates.set(e.code, true);
+    };
 
-  private initListeners(): void {
-    window.addEventListener('keydown', (e: KeyboardEvent) => {
-      this.keysDown.add(e.code);
-    });
+    this.onKeyUpBound = (e: KeyboardEvent) => {
+      this.keyStates.set(e.code, false);
+    };
 
-    window.addEventListener('keyup', (e: KeyboardEvent) => {
-      this.keysDown.delete(e.code);
-    });
+    window.addEventListener('keydown', this.onKeyDownBound);
+    window.addEventListener('keyup', this.onKeyUpBound);
   }
 
   public isKeyDown(code: string): boolean {
-    return this.keysDown.has(code);
+    return this.keyStates.get(code) === true;
   }
 
   public dispose(): void {
-    this.keysDown.clear();
+    window.removeEventListener('keydown', this.onKeyDownBound);
+    window.removeEventListener('keyup', this.onKeyUpBound);
+    this.keyStates.clear();
   }
 }

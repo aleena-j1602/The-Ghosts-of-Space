@@ -37,7 +37,11 @@ export class MoonEnvironment {
 
   // Space Shuttle Landing Site
   private landerRoot!: TransformNode;
-  private shuttleGroundOffset = 0;
+  public shuttleGroundOffset = 0;
+
+  public get shuttleRoot(): TransformNode {
+    return this.landerRoot;
+  }
 
   private earthMesh!: Mesh;
 

@@ -25,8 +25,19 @@ export class HUD {
   private lunaAlertText!: HTMLElement;
 
   private onMapClickCallback?: () => void;
+  private onToggleSensorMuteCallback?: () => void;
   private levelTagEl!: HTMLElement;
   private levelTitleEl!: HTMLElement;
+
+  private radarMuteBtn: HTMLElement | null = null;
+  private radarMuteIcon: HTMLElement | null = null;
+  private radarMuteText: HTMLElement | null = null;
+  private guideMuteBtn: HTMLElement | null = null;
+  private guideMuteIcon: HTMLElement | null = null;
+  private guideMuteStatus: HTMLElement | null = null;
+
+  private minimapCanvas: HTMLCanvasElement | null = null;
+  private minimapCtx: CanvasRenderingContext2D | null = null;
 
   constructor() {
     this.gameState = GameState.getInstance();
@@ -95,6 +106,10 @@ export class HUD {
             <span class="radar-pulse-dot"></span>
             <span class="radar-title">LUNA DETECTION SENSOR // METALLIC SIGNATURE</span>
             <span id="radar-distance" class="radar-dist">18.5m</span>
+            <button id="btn-radar-mute" class="hud-sensor-mute-btn" title="Toggle Luna Sensor Audio [U]">
+              <span id="radar-mute-icon">🔊</span>
+              <span id="radar-mute-text">AUDIO</span>
+            </button>
           </div>
           <div class="progress-bar radar-bar">
             <div id="radar-signal-fill" class="progress-fill cyan-fill" style="width: 45%"></div>
@@ -117,6 +132,28 @@ export class HUD {
         </div>
       </div>
 
+      <!-- Bottom-Left: Minimap HUD -->
+      <div id="hud-minimap-container" class="hud-minimap-container">
+        <div class="minimap-bezel">
+          <div class="minimap-header">
+            <span class="minimap-title-tag">RADAR MINIMAP</span>
+            <span class="minimap-poi-pill">SURFACE GRID</span>
+          </div>
+          <div class="minimap-canvas-wrapper" id="minimap-wrapper">
+            <canvas id="minimapCanvas" width="180" height="180"></canvas>
+            <span class="compass-marker marker-n">N</span>
+            <span class="compass-marker marker-s">S</span>
+            <span class="compass-marker marker-e">E</span>
+            <span class="compass-marker marker-w">W</span>
+          </div>
+          <div class="minimap-footer">
+            <button id="btn-minimap-expand" class="minimap-expand-btn">
+              EXPAND MAP <kbd>M</kbd>
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Bottom Center: Telemetry & Controls Prompt -->
       <div class="hud-bottom-center">
         <div class="controls-guide-bar glass-card">
@@ -125,6 +162,7 @@ export class HUD {
           <span class="key-pill"><kbd>MOUSE</kbd> ROTATE CAMERA</span>
           <span class="key-pill"><kbd>WHEEL</kbd> ZOOM</span>
           <span class="key-pill"><kbd>E</kbd> INTERACT</span>
+          <span class="key-pill sensor-toggle-pill" id="btn-guide-mute" title="Toggle Sensor Beeps"><kbd>U</kbd> <span id="guide-mute-icon">🔊</span> SENSOR: <span id="guide-mute-status">ON</span></span>
           <button id="btn-toggle-map" class="hud-map-btn"><kbd>M</kbd> OPEN MAP</button>
         </div>
         <div class="coordinates-pill">
@@ -153,14 +191,68 @@ export class HUD {
     this.lunaAlertBubble = this.container.querySelector('#luna-alert-bubble') as HTMLElement;
     this.lunaAlertText = this.container.querySelector('#luna-alert-text') as HTMLElement;
 
+    // Sensor mute elements
+    this.radarMuteBtn = this.container.querySelector('#btn-radar-mute') as HTMLElement;
+    this.radarMuteIcon = this.container.querySelector('#radar-mute-icon') as HTMLElement;
+    this.radarMuteText = this.container.querySelector('#radar-mute-text') as HTMLElement;
+    this.guideMuteBtn = this.container.querySelector('#btn-guide-mute') as HTMLElement;
+    this.guideMuteIcon = this.container.querySelector('#guide-mute-icon') as HTMLElement;
+    this.guideMuteStatus = this.container.querySelector('#guide-mute-status') as HTMLElement;
+
     const mapBtn = this.container.querySelector('#btn-toggle-map');
     mapBtn?.addEventListener('click', () => {
+      if (this.onMapClickCallback) this.onMapClickCallback();
+    });
+
+    const triggerToggleMute = (e: Event) => {
+      e.stopPropagation();
+      if (this.onToggleSensorMuteCallback) {
+        this.onToggleSensorMuteCallback();
+      }
+    };
+
+    this.radarMuteBtn?.addEventListener('click', triggerToggleMute);
+    this.guideMuteBtn?.addEventListener('click', triggerToggleMute);
+
+    // Minimap Canvas & Controls
+    this.minimapCanvas = this.container.querySelector('#minimapCanvas') as HTMLCanvasElement;
+    if (this.minimapCanvas) {
+      this.minimapCtx = this.minimapCanvas.getContext('2d');
+    }
+    const minimapBtn = this.container.querySelector('#btn-minimap-expand');
+    const minimapWrapper = this.container.querySelector('#minimap-wrapper');
+    minimapBtn?.addEventListener('click', () => {
+      if (this.onMapClickCallback) this.onMapClickCallback();
+    });
+    minimapWrapper?.addEventListener('click', () => {
       if (this.onMapClickCallback) this.onMapClickCallback();
     });
   }
 
   public setOnMapClick(cb: () => void): void {
     this.onMapClickCallback = cb;
+  }
+
+  public setOnToggleSensorMute(cb: () => void): void {
+    this.onToggleSensorMuteCallback = cb;
+  }
+
+  public setSensorMuted(muted: boolean): void {
+    if (muted) {
+      if (this.radarMuteIcon) this.radarMuteIcon.textContent = '🔇';
+      if (this.radarMuteText) this.radarMuteText.textContent = 'MUTED';
+      if (this.guideMuteIcon) this.guideMuteIcon.textContent = '🔇';
+      if (this.guideMuteStatus) this.guideMuteStatus.textContent = 'OFF';
+      this.radarMuteBtn?.classList.add('muted');
+      this.guideMuteBtn?.classList.add('muted');
+    } else {
+      if (this.radarMuteIcon) this.radarMuteIcon.textContent = '🔊';
+      if (this.radarMuteText) this.radarMuteText.textContent = 'AUDIO';
+      if (this.guideMuteIcon) this.guideMuteIcon.textContent = '🔊';
+      if (this.guideMuteStatus) this.guideMuteStatus.textContent = 'ON';
+      this.radarMuteBtn?.classList.remove('muted');
+      this.guideMuteBtn?.classList.remove('muted');
+    }
   }
 
   public setLevelInfo(sectorTag: string, levelTitle: string): void {
@@ -237,5 +329,65 @@ export class HUD {
     if (this.coordsEl && playerPos) {
       this.coordsEl.textContent = `X: ${playerPos.x.toFixed(1)} • Z: ${playerPos.z.toFixed(1)}`;
     }
+    if (playerPos) {
+      this.renderMinimap(playerPos);
+    }
+  }
+
+  private renderMinimap(playerPos: Vector3): void {
+    if (!this.minimapCtx || !this.minimapCanvas) return;
+    const ctx = this.minimapCtx;
+    const w = this.minimapCanvas.width;
+    const h = this.minimapCanvas.height;
+    const cx = w / 2;
+    const cy = h / 2;
+    const r = cx - 4;
+
+    ctx.clearRect(0, 0, w, h);
+
+    // Radar circular background
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(6, 12, 24, 0.92)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(70, 217, 232, 0.4)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Concentric range rings
+    [0.35, 0.7, 1.0].forEach((scale) => {
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * scale, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(70, 217, 232, 0.18)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    });
+
+    // Crosshairs
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - r);
+    ctx.lineTo(cx, cy + r);
+    ctx.moveTo(cx - r, cy);
+    ctx.lineTo(cx + r, cy);
+    ctx.strokeStyle = 'rgba(70, 217, 232, 0.15)';
+    ctx.stroke();
+
+    // Center player icon (cyan glowing dot)
+    ctx.beginPath();
+    ctx.arc(cx, cy, 3.5, 0, Math.PI * 2);
+    ctx.fillStyle = '#46d9e8';
+    ctx.shadowColor = '#46d9e8';
+    ctx.shadowBlur = 8;
+    ctx.fill();
+
+    // Coordinates tag at bottom of radar
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(70, 217, 232, 0.75)';
+    ctx.font = '8px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${playerPos.x.toFixed(0)}, ${playerPos.z.toFixed(0)}`, cx, cy + r - 6);
+
+    ctx.restore();
   }
 }

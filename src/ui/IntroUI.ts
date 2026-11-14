@@ -125,6 +125,11 @@ export class IntroUI {
   public showTitle(): void {
     this.titleOverlay.classList.remove('hidden');
     this.titleOverlay.style.opacity = '1';
+
+    // Auto-fade title after 6.5s so the cinematic remains unobstructed
+    setTimeout(() => {
+      this.hideTitle();
+    }, 6500);
   }
 
   public hideTitle(): void {

@@ -15,6 +15,7 @@ import { ReportManager } from '../systems/ReportManager.ts';
 import { SaveManager } from '../systems/SaveManager.ts';
 import { RechargeUI } from '../ui/RechargeUI.ts';
 import { ReportDesignerUI } from '../ui/ReportDesignerUI.ts';
+import { CinematicClosingUI } from '../ui/CinematicClosingUI.ts';
 import { MoonEnvironment } from '../environments/MoonEnvironment.ts';
 import { MarsEnvironment } from '../environments/MarsEnvironment.ts';
 
@@ -32,6 +33,7 @@ export class Game {
   private mapUI: MapUI;
   private investigationUI: InvestigationUI;
   private reportDesignerUI: ReportDesignerUI;
+  private cinematicClosingUI: CinematicClosingUI;
 
   // Telemetry indicators
   private fpsDisplay: HTMLElement | null = null;
@@ -74,6 +76,7 @@ export class Game {
     this.mapUI = new MapUI();
     this.investigationUI = new InvestigationUI();
     this.reportDesignerUI = new ReportDesignerUI();
+    this.cinematicClosingUI = new CinematicClosingUI();
 
     // Phase 6/7 system instantiation
     this.resourceManager = new ResourceManager();
@@ -85,6 +88,7 @@ export class Game {
     this.setupCinematicSequence();
     this.setupInvestigationEvents();
     this.setupReportDesigner();
+    this.setupClosingCinematicEvents();
     this.setupRechargeSystem();
     this.setupShelterPrompts();
     this.setupAirlockTransition();
@@ -98,6 +102,16 @@ export class Game {
 
     this.hud.setOnMapClick(() => {
       this.mapUI.toggle();
+    });
+
+    this.hud.setOnToggleSensorMute(() => {
+      const moonEnv = this.sceneManager.getMoonEnvironment();
+      const marsEnv = this.sceneManager.getMarsEnvironment();
+      const env = moonEnv || marsEnv;
+      if (env) {
+        const isMuted = env.lunaDetection.toggleMute();
+        this.hud.setSensorMuted(isMuted);
+      }
     });
   }
 
@@ -119,6 +133,16 @@ export class Game {
       if (e.code === 'KeyT') {
         this.handleReportKey();
       }
+      // U key: Toggle Luna sensor audio
+      if (e.code === 'KeyU') {
+        const moonEnv = this.sceneManager.getMoonEnvironment();
+        const marsEnv = this.sceneManager.getMarsEnvironment();
+        const env = moonEnv || marsEnv;
+        if (env) {
+          const isMuted = env.lunaDetection.toggleMute();
+          this.hud.setSensorMuted(isMuted);
+        }
+      }
       // I key: Archive (future)
       if (e.code === 'KeyI') {
         // placeholder for archive UI
@@ -128,7 +152,8 @@ export class Game {
 
   private setupCinematicSequence(): void {
     this.introUI.setOnEnterCabin(() => {
-      this.transitionToCabin();
+      this.sceneManager.skipSpaceCinematic();
+      this.transitionToCabin(true);
     });
 
     this.introUI.setOnConfirmMission(() => {
@@ -145,6 +170,19 @@ export class Game {
   private setupReportDesigner(): void {
     this.reportDesignerUI.setOnReportTransmitted((artifact: ArtifactDefinition) => {
       this.handleReportTransmitted(artifact);
+    });
+  }
+
+  private setupClosingCinematicEvents(): void {
+    this.cinematicClosingUI.setOnRestart(() => {
+      window.location.reload();
+    });
+
+    this.cinematicClosingUI.setOnFreeRoam(() => {
+      if (this.statusDisplay) {
+        this.statusDisplay.textContent = 'EXPEDITION COMPLETE // TRANS-EARTH ORBITAL CRUISE';
+        this.statusDisplay.style.color = '#46d9e8';
+      }
     });
   }
 
@@ -653,7 +691,7 @@ export class Game {
     }, 400);
   }
 
-  private transitionToCabin(): void {
+  private transitionToCabin(skipOpening: boolean = false): void {
     if (this.statusDisplay) {
       this.statusDisplay.textContent = 'TRANSITION: CABIN // FIRST-PERSON AWAKENING';
     }
@@ -667,9 +705,11 @@ export class Game {
           this.introUI.showBriefing();
         });
       }, 500);
-    });
+    }, skipOpening);
 
-    this.introUI.triggerAwakening(2600);
+    if (!skipOpening) {
+      this.introUI.triggerAwakening(2600);
+    }
   }
 
   private transitionToMoonLanding(): void {
@@ -1031,7 +1071,7 @@ export class Game {
 
       <div class="finale-actions">
         <button id="btn-replay-credits" class="btn-primary glow-ready">
-          VIEW MISSION TELEMETRY LOG &bull; RETURN TO EARTH ORBIT
+          INITIATE RETURN TO EARTH // EXPEDITION FINALE ▶
         </button>
       </div>
     `;
@@ -1042,17 +1082,51 @@ export class Game {
     const btnReplay = this.missionAccomplishedModal.querySelector('#btn-replay-credits');
     btnReplay?.addEventListener('click', () => {
       this.missionAccomplishedModal?.classList.add('hidden');
-      this.hud.showLunaAlert('"We made history, Explorer! Setting cruise vector back to Earth!"');
+      this.startClosingCinematic();
     });
   }
 
+  public startClosingCinematic(): void {
+    // 1. Hide HUD & any open modals
+    this.hud.hide();
+    this.missionAccomplishedModal?.classList.add('hidden');
+    this.shelterPrompt?.classList.add('hidden');
+    this.reportPrompt?.classList.add('hidden');
+
+    if (this.statusDisplay) {
+      this.statusDisplay.textContent = 'CINEMATIC // RETRO-PROPULSION TO EARTH ORBIT';
+      this.statusDisplay.style.color = '#46d9e8';
+    }
+    if (this.sceneDisplay) {
+      this.sceneDisplay.textContent = 'SpaceEnvironment';
+    }
+
+    // 2. Switch 3D scene to triumphant Earth return orbit
+    this.sceneManager.switchToClosingCinematic();
+
+    // 3. Launch Cinematic Closing UI with epilogue, roster, and Game Over screen
+    setTimeout(() => {
+      this.cinematicClosingUI.openClosingCinematic();
+    }, 600);
+  }
+
   public start(): void {
-    this.sceneManager.initSpaceCinematic();
+    const spaceEnv = this.sceneManager.initSpaceCinematic();
     this.introUI.showTitle();
 
     if (this.statusDisplay) {
       this.statusDisplay.textContent = 'CINEMATIC // APPROACHING THE MOON';
     }
+
+    spaceEnv.setOnIntroComplete(() => {
+      this.introUI.hideTitle();
+      this.transitionToCabin(false);
+    });
+
+    spaceEnv.setOnSkip(() => {
+      this.introUI.hideTitle();
+      this.transitionToCabin(true);
+    });
 
     setInterval(() => {
       const fps = Math.round(this.engine.getFps());

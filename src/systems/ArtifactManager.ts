@@ -33,6 +33,12 @@ export class ArtifactManager {
     'a12-lm6-ascent': new Vector3(-28, 0, 32),
     'a15-lm10-ascent': new Vector3(14, 0, -38),
 
+    // Moon legacy / friendly aliases
+    'apollo11_eagle': new Vector3(32, 0, 22),
+    'apollo_alsep': new Vector3(-28, 0, 32),
+    'apollo_rover': new Vector3(14, 0, -38),
+    'apollo15_rover': new Vector3(14, 0, -38),
+
     // Level 2: Mars (Chryse Planitia, Ares Vallis & Gusev Crater)
     'viking-1-lander': new Vector3(34, 0, 24),
     'sojourner': new Vector3(-28, 0, 30),
@@ -43,8 +49,9 @@ export class ArtifactManager {
     this.scene = scene;
     this.level = level;
 
-    // Load artifacts filtered by current level.
-    this.artifacts = Object.values(ARTIFACTS_DATA).filter(
+    // Load artifacts filtered by current level, deduplicating any alias references.
+    const uniqueArtifacts = Array.from(new Set(Object.values(ARTIFACTS_DATA)));
+    this.artifacts = uniqueArtifacts.filter(
       (artifact) => artifact.level === this.level
     );
 

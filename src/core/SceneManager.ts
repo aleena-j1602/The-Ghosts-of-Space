@@ -22,7 +22,7 @@ export class SceneManager {
     this.inputManager = inputManager;
   }
 
-  public initSpaceCinematic(): void {
+  public initSpaceCinematic(): SpaceEnvironment {
     this.disposeCurrent();
     this.spaceEnvironment = new SpaceEnvironment(this.engine);
     this.activeSceneName = 'SpaceEnvironment';
@@ -33,11 +33,35 @@ export class SceneManager {
         this.spaceEnvironment.scene.render();
       }
     });
+
+    return this.spaceEnvironment;
   }
 
-  public switchToCabin(onLunaAwakened?: () => void): CabinEnvironment {
+  public skipSpaceCinematic(): void {
+    if (this.spaceEnvironment) {
+      this.spaceEnvironment.dispose();
+      this.spaceEnvironment = null;
+    }
+  }
+
+  public switchToClosingCinematic(): SpaceEnvironment {
     this.disposeCurrent();
-    this.cabinEnvironment = new CabinEnvironment(this.engine, onLunaAwakened);
+    this.spaceEnvironment = new SpaceEnvironment(this.engine, true);
+    this.activeSceneName = 'SpaceEnvironment';
+
+    this.engine.stopRenderLoop();
+    this.engine.runRenderLoop(() => {
+      if (this.spaceEnvironment?.scene) {
+        this.spaceEnvironment.scene.render();
+      }
+    });
+
+    return this.spaceEnvironment;
+  }
+
+  public switchToCabin(onLunaAwakened?: () => void, skipToAwakened: boolean = false): CabinEnvironment {
+    this.disposeCurrent();
+    this.cabinEnvironment = new CabinEnvironment(this.engine, onLunaAwakened, false, skipToAwakened);
     this.activeSceneName = 'CabinEnvironment';
 
     this.engine.stopRenderLoop();
@@ -211,6 +235,14 @@ export class SceneManager {
     });
 
     return this.researchCabinEnvironment;
+  }
+
+  public getSpaceEnvironment(): SpaceEnvironment | null {
+    return this.spaceEnvironment;
+  }
+
+  public getCabinEnvironment(): CabinEnvironment | null {
+    return this.cabinEnvironment;
   }
 
   public getMoonEnvironment(): MoonEnvironment | null {
