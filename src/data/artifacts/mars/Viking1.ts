@@ -3,6 +3,7 @@ import type { ArtifactDefinition } from '../../artifacts/Core/artifactTypes.ts';
 
 export const VIKING_1_LANDER: ArtifactDefinition = {
   id: 'viking-1-lander',
+  sourceFileName: 'Viking1',
   officialName: 'Viking 1 Lander',
   commonName: 'Viking 1',
   aliases: [

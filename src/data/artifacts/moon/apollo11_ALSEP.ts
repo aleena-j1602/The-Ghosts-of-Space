@@ -3,6 +3,7 @@ import type { ArtifactDefinition } from '../../artifacts/Core/artifactTypes.ts';
 
 export const A12_LM6_ASCENT: ArtifactDefinition = {
   id: 'a12-lm6-ascent',
+  sourceFileName: 'apollo11_ALSEP',
   officialName: 'Apollo 12 Lunar Module LM-6 "Intrepid" (ascent stage)',
   commonName: 'Intrepid Ascent Stage Impact Site',
   aliases: [

@@ -3,6 +3,7 @@ import type { ArtifactDefinition } from '../Core/artifactTypes.ts';
 
 export const PIONEER_10: ArtifactDefinition = {
   id: 'pioneer-10',
+  sourceFileName: 'pioneer-10',
   officialName: 'Pioneer 10 (Pioneer-F)',
   commonName: 'Pioneer 10',
   aliases: [

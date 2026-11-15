@@ -57,7 +57,7 @@ export class IntroUI {
             </div>
             <div class="briefing-item">
               <span class="label">MISSION DEADLINE:</span>
-              <span class="val highlight-amber">14 In-Game Days</span>
+              <span class="val highlight-amber">15 In-Game Days</span>
             </div>
           </div>
           <div class="briefing-col">

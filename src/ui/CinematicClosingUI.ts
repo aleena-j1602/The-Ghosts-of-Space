@@ -37,17 +37,17 @@ export class CinematicClosingUI {
           <div class="epilogue-dialogues">
             <div class="epilogue-line">
               <span class="speaker-tag earth">EARTH COMMAND // HOUSTON DSN</span>
-              <p>&ldquo;Ghost Archive vessel, telemetry lock confirmed. Welcome back. All 9 historic artifact datasets from the Moon, Mars, and Deep Space are successfully decrypted. You brought our history home.&rdquo;</p>
+              <p>&ldquo;Ghost Archive vessel, telemetry lock confirmed. Welcome back. Mandatory recuperation protocol is initiated at landing site Alpha. Take your well-deserved rest, Explorer—because classified telemetry from the outer moons has already begun. A new expedition awaits in Part 2.&rdquo;</p>
             </div>
             
             <div class="epilogue-line">
               <span class="speaker-tag luna">LUNA // COMPANION</span>
-              <p>&ldquo;Look out that forward canopy, Explorer... that pale blue dot is home. For decades, those machines waited alone in the dark. Because of you, humanity will never forget who blazed the trail.&rdquo;</p>
+              <p>&ldquo;Look out that forward canopy, Explorer... that pale blue dot is home. For decades, those machines waited alone in the dark. Because of you, humanity will never forget who blazed the trail. Now let's get you rested for what's next!&rdquo;</p>
             </div>
 
             <div class="epilogue-line">
               <span class="speaker-tag player">EXPLORER // FLIGHT COMMAND</span>
-              <p>&ldquo;From Armstrong's footsteps at Tranquility Base, to Spirit's lonely wheel tracks on Mars, to Pioneer 10 sailing into the stars with humanity's golden message... they are remembered.&rdquo;</p>
+              <p>&ldquo;From Armstrong's footsteps at Tranquility Base, to Spirit's lonely wheel tracks on Mars, to Pioneer 10 sailing into the stars with humanity's golden message... they are remembered. Ready for splashdown and recuperation.&rdquo;</p>
             </div>
           </div>
 
@@ -155,6 +155,13 @@ export class CinematicClosingUI {
               <span class="credit-role">Autonomous Companion Diagnostics</span>
               <span class="credit-name">LUNA AI System</span>
             </div>
+          </div>
+
+          <!-- Sequel Teaser -->
+          <div class="closing-sequel-card">
+            <span class="sequel-pill">CHAPTER 2 IN DEVELOPMENT</span>
+            <h3 class="sequel-headline">GHOSTS OF SPACE: PART 2</h3>
+            <p class="sequel-text">New Expeditions Await Across Titan, Europa, and the Kuiper Belt Probes.</p>
           </div>
 
           <div class="final-interactive-actions">

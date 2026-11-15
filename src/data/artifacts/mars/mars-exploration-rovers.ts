@@ -7,6 +7,7 @@ import type { ArtifactDefinition } from '../../artifacts/Core/artifactTypes.ts';
 
 export const SPIRIT: ArtifactDefinition = {
   id: 'spirit',
+  sourceFileName: 'mars-exploration-rovers',
   officialName: 'Mars Exploration Rover A — Spirit',
   commonName: 'Spirit',
   aliases: ['MER-A', 'MER-2', 'Mars Exploration Rover A', 'Columbia Memorial Station'],
@@ -691,6 +692,7 @@ export const SPIRIT: ArtifactDefinition = {
 
 export const OPPORTUNITY: ArtifactDefinition = {
   id: 'opportunity',
+  sourceFileName: 'mars-exploration-rovers',
   officialName: 'Mars Exploration Rover B — Opportunity',
   commonName: 'Opportunity',
   aliases: ['MER-B', 'MER-1', 'Oppy', 'Mars Exploration Rover B', 'Challenger Memorial Station'],

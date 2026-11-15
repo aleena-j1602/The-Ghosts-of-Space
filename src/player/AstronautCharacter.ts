@@ -16,7 +16,6 @@ export class AstronautCharacter {
 
   // Imported model
   private loaded = false;
-  private disposed = false;
 
   // Animation state
   private walkCycle = 0;
@@ -54,12 +53,6 @@ export class AstronautCharacter {
         'astronaut.glb',
         this.scene
       );
-
-      if (this.disposed) {
-        result.meshes.forEach((mesh) => mesh.dispose());
-        result.transformNodes.forEach((node) => node.dispose());
-        return;
-      }
 
       this.meshes = result.meshes;
 
@@ -223,9 +216,6 @@ export class AstronautCharacter {
 
   // Dispose astronaut and imported model
   public dispose(): void {
-    this.disposed = true;
-    this.meshes.forEach((mesh) => mesh.dispose());
-    this.meshes = [];
     this.root.dispose();
   }
 }

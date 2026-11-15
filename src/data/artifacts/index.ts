@@ -45,3 +45,5 @@ export const ARTIFACTS_DATA: Record<string, ArtifactDefinition> = {
   [NEAR_SHOEMAKER.id]: NEAR_SHOEMAKER,
   [PIONEER_10.id]: PIONEER_10,
 };
+
+export * from './artifactImageMap.ts';

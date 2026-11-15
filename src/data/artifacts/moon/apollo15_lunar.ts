@@ -6,6 +6,7 @@ import type { ArtifactDefinition } from '../../artifacts/Core/artifactTypes.ts';
 
 export const A15_LM10_ASCENT: ArtifactDefinition = {
   id: 'a15-lm10-ascent',
+  sourceFileName: 'apollo15_lunar',
   officialName: 'Apollo 15 Lunar Module / LM-10 "Falcon" (ascent stage)',
   commonName: 'Falcon Ascent Stage',
   aliases: ['Falcon', 'LM-10', 'Apollo 15 Ascent Stage', '1971-063C'],

@@ -145,6 +145,7 @@ export interface ArchiveContent {
 
 export interface ArtifactDefinition {
   id: string;
+  sourceFileName?: string;
   isCollected?: boolean;
   officialName: string;
   commonName: string;

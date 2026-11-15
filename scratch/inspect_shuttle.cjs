@@ -54,7 +54,7 @@ async function inspect() {
         }).on('error', reject);
       });
       if (targets && targets.length > 0) break;
-    } catch { }
+    } catch {}
   }
 
   const pageTarget = targets.find(t => t.type === 'page') || targets[0];
@@ -150,5 +150,5 @@ inspect()
   .finally(() => {
     if (ws) ws.close();
     if (chromeProcess) chromeProcess.kill();
-    try { fs.rmSync(testProfileDir, { recursive: true, force: true }); } catch { }
+    try { fs.rmSync(testProfileDir, { recursive: true, force: true }); } catch {}
   });

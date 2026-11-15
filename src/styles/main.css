@@ -856,6 +856,95 @@ kbd {
   letter-spacing: 0.05rem;
 }
 
+/* Option Card near Tracker: Return to Shuttle for Takeoff */
+.return-to-shuttle-card {
+  background: rgba(8, 16, 32, 0.94);
+  border: 1.5px solid var(--color-cyan, #46d9e8);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7), 0 0 25px rgba(70, 217, 232, 0.45);
+  padding: 0.75rem 1.25rem;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  pointer-events: auto;
+  animation: shuttle-card-pulse 2.2s infinite ease-in-out;
+  min-width: 320px;
+}
+
+@keyframes shuttle-card-pulse {
+  0%, 100% {
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7), 0 0 20px rgba(70, 217, 232, 0.35);
+  }
+  50% {
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7), 0 0 35px rgba(70, 217, 232, 0.75);
+  }
+}
+
+.shuttle-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.shuttle-badge {
+  font-family: var(--font-family-mono, monospace);
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: var(--color-amber, #f59e0b);
+  letter-spacing: 0.08rem;
+}
+
+.shuttle-card-title {
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 0.05rem;
+}
+
+.shuttle-card-sub {
+  font-family: var(--font-family-mono, monospace);
+  font-size: 0.68rem;
+  color: var(--color-cyan, #46d9e8);
+}
+
+.btn-return-shuttle {
+  background: rgba(70, 217, 232, 0.2);
+  border: 1px solid var(--color-cyan, #46d9e8);
+  border-radius: 6px;
+  color: #ffffff;
+  font-family: var(--font-family-mono, monospace);
+  font-size: 0.78rem;
+  font-weight: 800;
+  padding: 0.45rem 0.85rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.btn-return-shuttle kbd {
+  background: var(--color-cyan, #46d9e8);
+  color: #030712;
+  font-weight: 900;
+  padding: 0.15rem 0.4rem;
+  border-radius: 3px;
+  font-size: 0.75rem;
+}
+
+.btn-return-shuttle:hover {
+  background: var(--color-cyan, #46d9e8);
+  color: #030712;
+  box-shadow: 0 0 15px var(--color-cyan-glow);
+}
+
+.btn-return-shuttle:hover kbd {
+  background: #030712;
+  color: #ffffff;
+}
+
 .hud-map-btn {
   background: transparent;
   border: none;
@@ -1497,6 +1586,353 @@ kbd {
 }
 
 /* ==========================================================================
+   Archival Probe Preview Button & Modal (NASA Mission Control Lightbox)
+   ========================================================================== */
+
+.dossier-action-area {
+  margin-top: auto;
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  padding: 0.25rem 0 0.25rem 0;
+}
+
+.btn-preview-probe {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(8, 14, 26, 0.85);
+  border: 1px solid rgba(70, 217, 232, 0.4);
+  border-radius: 4px;
+  color: var(--color-cyan, #46d9e8);
+  font-family: var(--font-family-mono, monospace);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08rem;
+  padding: 0.42rem 0.85rem;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  width: auto;
+  user-select: none;
+}
+
+.btn-preview-probe:hover {
+  background: rgba(70, 217, 232, 0.12);
+  border-color: rgba(70, 217, 232, 0.85);
+  color: #ffffff;
+  box-shadow: 0 0 14px rgba(70, 217, 232, 0.45);
+  transform: translateY(-1px);
+}
+
+.btn-preview-probe:active {
+  background: rgba(70, 217, 232, 0.22);
+  transform: translateY(0);
+}
+
+.btn-preview-probe .preview-icon {
+  width: 14px;
+  height: 14px;
+  stroke: var(--color-cyan, #46d9e8);
+  transition: stroke 0.2s ease;
+  flex-shrink: 0;
+}
+
+.btn-preview-probe:hover .preview-icon {
+  stroke: #ffffff;
+}
+
+/* Centered Archival Probe Preview Lightbox Overlay */
+.probe-preview-lightbox {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(3, 6, 14, 0.86);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  transition: opacity 0.25s ease;
+  opacity: 1;
+}
+
+.probe-preview-lightbox.hidden {
+  display: none !important;
+  opacity: 0;
+}
+
+.probe-preview-modal {
+  width: 95%;
+  max-width: 1100px;
+  max-height: 90vh;
+  background: rgba(5, 10, 22, 0.94);
+  border: 1px solid rgba(70, 217, 232, 0.5);
+  border-radius: 12px;
+  box-shadow: 0 0 50px rgba(70, 217, 232, 0.25), inset 0 0 30px rgba(70, 217, 232, 0.05);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: modal-enter 0.25s ease-out;
+}
+
+.probe-preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 1.25rem 1.5rem 1rem;
+  border-bottom: 1px solid rgba(70, 217, 232, 0.2);
+  background: rgba(8, 14, 28, 0.6);
+}
+
+.probe-preview-header h2 {
+  font-size: 1.45rem;
+  letter-spacing: 0.12rem;
+  color: var(--color-text-white, #ffffff);
+  margin: 0.2rem 0;
+  font-family: var(--font-family-title, sans-serif);
+}
+
+.preview-probe-subtitle {
+  font-family: var(--font-family-mono, monospace);
+  font-size: 0.78rem;
+  color: var(--color-amber, #f59e0b);
+}
+
+.probe-preview-body {
+  padding: 1.25rem 1.5rem;
+  overflow-y: auto;
+  max-height: calc(90vh - 160px);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* Grid Layouts: Dual (Actual + Diagram) vs Single (Actual only) */
+.probe-preview-grid.dual-view {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  align-items: stretch;
+}
+
+.probe-preview-grid.single-view {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.probe-preview-grid.single-view .preview-image-section {
+  max-width: 720px;
+  width: 100%;
+}
+
+.preview-image-section {
+  background: rgba(10, 16, 32, 0.75);
+  border: 1px solid rgba(70, 217, 232, 0.22);
+  border-radius: 8px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.5);
+}
+
+.preview-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 0.5rem;
+}
+
+.preview-badge {
+  font-family: var(--font-family-mono, monospace);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 4px;
+}
+
+.badge-actual {
+  background: rgba(70, 217, 232, 0.18);
+  border: 1px solid var(--color-cyan, #46d9e8);
+  color: var(--color-cyan, #46d9e8);
+  box-shadow: 0 0 10px rgba(70, 217, 232, 0.25);
+}
+
+.badge-diagram {
+  background: rgba(245, 158, 11, 0.18);
+  border: 1px solid var(--color-amber, #f59e0b);
+  color: var(--color-amber, #f59e0b);
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.25);
+}
+
+.preview-section-label {
+  font-family: var(--font-family-mono, monospace);
+  font-size: 0.68rem;
+  color: var(--color-muted-grey, #94a3b8);
+  letter-spacing: 0.05rem;
+}
+
+.preview-image-frame {
+  position: relative;
+  min-height: 260px;
+  max-height: 48vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(2, 4, 10, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  padding: 0.6rem;
+  overflow: hidden;
+}
+
+.preview-img {
+  max-width: 100%;
+  max-height: 46vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 4px;
+  display: block;
+  filter: contrast(1.05) brightness(1.02);
+  transition: transform 0.25s ease;
+}
+
+.preview-img:hover {
+  transform: scale(1.015);
+}
+
+.image-loading-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--color-cyan, #46d9e8);
+  font-family: var(--font-family-mono, monospace);
+  font-size: 0.72rem;
+  letter-spacing: 0.05rem;
+}
+
+.preview-image-caption {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  font-family: var(--font-family-mono, monospace);
+  font-size: 0.72rem;
+  color: var(--color-muted-grey, #94a3b8);
+  background: rgba(5, 9, 18, 0.5);
+  padding: 0.5rem 0.7rem;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.preview-image-caption .caption-icon {
+  font-size: 0.85rem;
+  line-height: 1.2;
+}
+
+.caption-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.caption-text {
+  color: var(--color-text-white, #ffffff);
+  font-weight: 600;
+  font-size: 0.72rem;
+}
+
+.caption-subnote {
+  color: var(--color-muted-grey, #94a3b8);
+  font-size: 0.67rem;
+}
+
+.preview-image-fallback {
+  text-align: center;
+  padding: 1.5rem;
+  color: var(--color-amber, #f59e0b);
+  font-family: var(--font-family-mono, monospace);
+}
+
+.preview-image-fallback .fallback-icon {
+  font-size: 1.8rem;
+  margin-bottom: 0.5rem;
+}
+
+.preview-image-fallback .fallback-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.06rem;
+  color: #f87171;
+  margin-bottom: 0.25rem;
+}
+
+.preview-image-fallback .fallback-sub {
+  font-size: 0.68rem;
+  color: var(--color-muted-grey, #94a3b8);
+}
+
+.probe-preview-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.85rem 1.5rem;
+  border-top: 1px solid rgba(70, 217, 232, 0.15);
+  background: rgba(8, 14, 28, 0.7);
+}
+
+.preview-footer-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--font-family-mono, monospace);
+  font-size: 0.7rem;
+  color: var(--color-muted-grey, #94a3b8);
+  letter-spacing: 0.06rem;
+}
+
+.btn-dismiss-preview {
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(70, 217, 232, 0.35);
+  border-radius: 4px;
+  color: var(--color-cyan, #46d9e8);
+  font-family: var(--font-family-mono, monospace);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.4rem 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-dismiss-preview:hover {
+  background: rgba(70, 217, 232, 0.15);
+  border-color: var(--color-cyan, #46d9e8);
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(70, 217, 232, 0.3);
+}
+
+@media (max-width: 860px) {
+  .probe-preview-grid.dual-view {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  .preview-image-frame {
+    min-height: 200px;
+    max-height: 38vh;
+  }
+}
+
+/* ==========================================================================
    Airlock & Recharge Transition System
    ========================================================================== */
 
@@ -2029,6 +2465,74 @@ kbd {
   color: var(--color-muted-grey);
   line-height: 1.6;
   font-style: italic;
+  margin: 0;
+}
+
+.finale-sequel-card {
+  background: rgba(70, 217, 232, 0.08);
+  border: 1px dashed rgba(70, 217, 232, 0.4);
+  border-radius: 12px;
+  padding: 1rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  text-align: center;
+  box-shadow: 0 0 20px rgba(70, 217, 232, 0.15);
+}
+
+.finale-sequel-card .sequel-badge {
+  font-family: var(--font-family-mono);
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: var(--color-cyan);
+  letter-spacing: 0.14em;
+}
+
+.finale-sequel-card .sequel-title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 0.08em;
+}
+
+.finale-sequel-card .sequel-desc {
+  font-size: 0.82rem;
+  color: var(--color-amber);
+  margin: 0;
+  font-family: var(--font-family-mono);
+}
+
+.closing-sequel-card {
+  background: rgba(16, 24, 39, 0.85);
+  border: 1px solid rgba(70, 217, 232, 0.35);
+  border-radius: 8px;
+  padding: 0.85rem 1.25rem;
+  margin: 1.25rem 0;
+  text-align: center;
+  box-shadow: 0 0 15px rgba(70, 217, 232, 0.2);
+}
+
+.closing-sequel-card .sequel-pill {
+  font-family: var(--font-family-mono);
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: var(--color-amber);
+  letter-spacing: 0.1em;
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.closing-sequel-card .sequel-headline {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 0.06em;
+  margin: 0.2rem 0;
+}
+
+.closing-sequel-card .sequel-text {
+  font-size: 0.8rem;
+  color: var(--color-cyan);
   margin: 0;
 }
 

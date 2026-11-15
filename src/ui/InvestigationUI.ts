@@ -4,11 +4,22 @@ import type {
   Challenge,
   ChallengeOption,
 } from '../data/artifacts/Core/artifactTypes.ts';
+import {
+  getArtifactPreviewMedia,
+  type ArtifactPreviewMedia,
+} from '../data/artifacts/artifactImageMap.ts';
 
 export class InvestigationUI {
   private container: HTMLElement;
   private scanModal!: HTMLElement;
   private investigateModal!: HTMLElement;
+
+  // Archival probe preview lightbox & elements
+  private previewLightbox!: HTMLElement;
+  private previewModalBody!: HTMLElement;
+  private previewTitle!: HTMLElement;
+  private previewSubtitle!: HTMLElement;
+  private previewAgencyTag!: HTMLElement;
 
   private currentArtifact: ArtifactDefinition | null = null;
   private challengeCompleted: boolean = false;
@@ -78,6 +89,17 @@ export class InvestigationUI {
                 <p id="inv-status" class="dossier-val highlight-cyan"></p>
               </div>
             </div>
+
+            <!-- PREVIEW PROBE button in empty space directly below dossier card -->
+            <div class="dossier-action-area">
+              <button id="btn-preview-probe" class="btn-preview-probe" type="button" aria-label="Preview probe optical photograph and technical diagram">
+                <svg class="preview-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+                <span>PREVIEW PROBE</span>
+              </button>
+            </div>
           </div>
 
           <!-- Right Column: Component Inspection & Knowledge Challenge -->
@@ -133,12 +155,43 @@ export class InvestigationUI {
           </button>
         </div>
       </div>
+
+      <!-- Archival Probe Preview Lightbox Overlay -->
+      <div id="probe-preview-lightbox" class="probe-preview-lightbox hidden">
+        <div class="probe-preview-modal glass-card">
+          <div class="probe-preview-header">
+            <div class="preview-header-info">
+              <div class="card-tag" id="preview-agency-tag">ARCHIVAL RECONNAISSANCE // NASA ARCHIVE</div>
+              <h2 id="preview-modal-title">PROBE OPTICAL &amp; TECHNICAL TELEMETRY</h2>
+              <div class="preview-probe-subtitle" id="preview-probe-subtitle">TRANQUILITY BASE &bull; APOLLO 11</div>
+            </div>
+            <button id="btn-close-probe-preview" class="map-close-btn" type="button" aria-label="Close preview">&times;</button>
+          </div>
+
+          <div id="preview-modal-body" class="probe-preview-body">
+            <!-- Dynamically populated based on artifact and available images -->
+          </div>
+
+          <div class="probe-preview-footer">
+            <div class="preview-footer-status">
+              <span class="status-indicator-dot"></span>
+              <span id="preview-footer-status-text">DEEP ARCHIVE IMAGING // TELEMETRY VERIFIED</span>
+            </div>
+            <button id="btn-dismiss-probe-preview" class="btn-dismiss-preview" type="button">CLOSE PREVIEW [ESC]</button>
+          </div>
+        </div>
+      </div>
     `;
 
     document.getElementById('ui-container')?.appendChild(this.container);
 
     this.scanModal = this.container.querySelector('#scan-modal') as HTMLElement;
     this.investigateModal = this.container.querySelector('#investigate-modal') as HTMLElement;
+    this.previewLightbox = this.container.querySelector('#probe-preview-lightbox') as HTMLElement;
+    this.previewModalBody = this.container.querySelector('#preview-modal-body') as HTMLElement;
+    this.previewTitle = this.container.querySelector('#preview-modal-title') as HTMLElement;
+    this.previewSubtitle = this.container.querySelector('#preview-probe-subtitle') as HTMLElement;
+    this.previewAgencyTag = this.container.querySelector('#preview-agency-tag') as HTMLElement;
 
     this.bindEvents();
   }
@@ -190,6 +243,37 @@ export class InvestigationUI {
     btnCollect?.addEventListener('click', () => {
       if (this.challengeCompleted && this.currentArtifact) {
         this.finishCollection();
+      }
+    });
+
+    // Preview Probe modal events
+    const btnPreview = this.container.querySelector('#btn-preview-probe');
+    btnPreview?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.openProbePreview();
+    });
+
+    const btnClosePreview = this.container.querySelector('#btn-close-probe-preview');
+    btnClosePreview?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.closeProbePreview();
+    });
+
+    const btnDismissPreview = this.container.querySelector('#btn-dismiss-probe-preview');
+    btnDismissPreview?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.closeProbePreview();
+    });
+
+    this.previewLightbox?.addEventListener('click', (e) => {
+      if (e.target === this.previewLightbox) {
+        this.closeProbePreview();
+      }
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && this.isProbePreviewOpen()) {
+        this.closeProbePreview();
       }
     });
   }
@@ -416,6 +500,7 @@ export class InvestigationUI {
   }
 
   public hide(): void {
+    this.closeProbePreview();
     this.container.style.opacity = '0';
     setTimeout(() => {
       this.container.classList.add('hidden');
@@ -424,5 +509,166 @@ export class InvestigationUI {
 
   public isOpen(): boolean {
     return !this.container.classList.contains('hidden');
+  }
+
+  public isProbePreviewOpen(): boolean {
+    return Boolean(this.previewLightbox && !this.previewLightbox.classList.contains('hidden'));
+  }
+
+  public openProbePreview(): void {
+    if (!this.currentArtifact) return;
+
+    this.playTone(560, 0.12, 'sine');
+
+    const art = this.currentArtifact;
+    const media = getArtifactPreviewMedia(art);
+
+    if (this.previewAgencyTag) {
+      this.previewAgencyTag.textContent = `${art.agency.toUpperCase()} // OPTICAL & TECHNICAL ARCHIVE`;
+    }
+    if (this.previewTitle) {
+      this.previewTitle.textContent = art.commonName.toUpperCase();
+    }
+    if (this.previewSubtitle) {
+      this.previewSubtitle.textContent = `${art.officialName} • Target Body: ${art.destination}`;
+    }
+
+    this.renderPreviewMedia(media, art);
+
+    this.previewLightbox.classList.remove('hidden');
+    this.previewLightbox.style.opacity = '1';
+  }
+
+  public closeProbePreview(): void {
+    if (!this.previewLightbox || this.previewLightbox.classList.contains('hidden')) return;
+
+    this.playTone(360, 0.08, 'sine');
+    this.previewLightbox.style.opacity = '0';
+    setTimeout(() => {
+      this.previewLightbox?.classList.add('hidden');
+    }, 200);
+  }
+
+  private renderPreviewMedia(media: ArtifactPreviewMedia | null, artifact: ArtifactDefinition): void {
+    if (!this.previewModalBody) return;
+    this.previewModalBody.innerHTML = '';
+
+    if (!media || (!media.actualImage && !media.technicalDiagram)) {
+      this.previewModalBody.innerHTML = `
+        <div class="preview-image-fallback standalone">
+          <div class="fallback-icon">📡</div>
+          <div class="fallback-title">NO OPTICAL OR SCHEMATIC ASSETS RECORDED</div>
+          <div class="fallback-sub">Archival imagery for ${artifact.commonName} is not available in local telemetry storage.</div>
+        </div>
+      `;
+      return;
+    }
+
+    const hasDiagram = Boolean(media.technicalDiagram);
+
+    if (hasDiagram) {
+      // Dual view: Actual Image & Technical Diagram
+      const grid = document.createElement('div');
+      grid.className = 'probe-preview-grid dual-view';
+
+      const actualSection = this.createImageSection(
+        'ACTUAL IMAGE',
+        'Real / Reference Photograph',
+        media.actualImage,
+        `${artifact.commonName} - Real photograph`,
+        'ACTUAL IMAGE – Real/reference photograph of the artifact',
+        'badge-actual',
+        media.agency || artifact.agency
+      );
+
+      const diagramSection = this.createImageSection(
+        'TECHNICAL DIAGRAM',
+        'Diagram / Technical Illustration',
+        media.technicalDiagram!,
+        `${artifact.commonName} - Technical diagram`,
+        'TECHNICAL DIAGRAM – Diagram or technical illustration of the artifact',
+        'badge-diagram',
+        media.technicalNotes
+      );
+
+      grid.appendChild(actualSection);
+      grid.appendChild(diagramSection);
+      this.previewModalBody.appendChild(grid);
+    } else {
+      // Single view: Actual Image only
+      const grid = document.createElement('div');
+      grid.className = 'probe-preview-grid single-view';
+
+      const actualSection = this.createImageSection(
+        'ACTUAL IMAGE',
+        'Real / Reference Photograph',
+        media.actualImage,
+        `${artifact.commonName} - Real photograph`,
+        'ACTUAL IMAGE – Real/reference photograph of the artifact',
+        'badge-actual',
+        media.agency || artifact.agency
+      );
+
+      grid.appendChild(actualSection);
+      this.previewModalBody.appendChild(grid);
+    }
+  }
+
+  private createImageSection(
+    badgeText: string,
+    subLabel: string,
+    imgSrc: string,
+    altText: string,
+    captionText: string,
+    badgeClass: string,
+    noteText?: string
+  ): HTMLElement {
+    const section = document.createElement('div');
+    section.className = 'preview-image-section glass-card';
+
+    section.innerHTML = `
+      <div class="preview-section-header">
+        <span class="preview-badge ${badgeClass}">${badgeText}</span>
+        <span class="preview-section-label">${subLabel}</span>
+      </div>
+      <div class="preview-image-frame">
+        <div class="image-loading-placeholder">
+          <div class="scan-reticle" style="width: 32px; height: 32px; border-width: 2px;"></div>
+          <span>ACQUIRING ARCHIVE IMAGE...</span>
+        </div>
+        <img class="preview-img" src="${imgSrc}" alt="${altText}" style="display: none;" />
+      </div>
+      <div class="preview-image-caption">
+        <span class="caption-icon">🛰</span>
+        <div class="caption-content">
+          <span class="caption-text">${captionText}</span>
+          ${noteText ? `<span class="caption-subnote">${noteText}</span>` : ''}
+        </div>
+      </div>
+    `;
+
+    const img = section.querySelector('.preview-img') as HTMLImageElement;
+    const loader = section.querySelector('.image-loading-placeholder') as HTMLElement;
+    const frame = section.querySelector('.preview-image-frame') as HTMLElement;
+
+    img.onload = () => {
+      if (loader) loader.style.display = 'none';
+      img.style.display = 'block';
+    };
+
+    img.onerror = () => {
+      if (loader) loader.style.display = 'none';
+      img.style.display = 'none';
+      const fallback = document.createElement('div');
+      fallback.className = 'preview-image-fallback';
+      fallback.innerHTML = `
+        <div class="fallback-icon">⚠️</div>
+        <div class="fallback-title">VISUAL DATA FEED OFFLINE</div>
+        <div class="fallback-sub">Could not retrieve file: ${imgSrc}</div>
+      `;
+      frame.appendChild(fallback);
+    };
+
+    return section;
   }
 }

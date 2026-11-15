@@ -3,6 +3,7 @@ import type { ArtifactDefinition } from '../../artifacts/Core/artifactTypes.ts';
 
 export const NEAR_SHOEMAKER: ArtifactDefinition = {
   id: 'near-shoemaker',
+  sourceFileName: 'near-shoemaker',
   officialName: 'Near Earth Asteroid Rendezvous Shoemaker',
   commonName: 'NEAR Shoemaker',
   aliases: ['NEAR', 'NEAR spacecraft', 'Near Earth Asteroid Rendezvous'],

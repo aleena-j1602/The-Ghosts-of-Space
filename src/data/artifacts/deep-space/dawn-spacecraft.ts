@@ -2,6 +2,7 @@ import type { ArtifactDefinition } from '../../artifacts/Core/artifactTypes.ts';
 
 export const DAWN_SPACECRAFT: ArtifactDefinition = {
   id: 'nasa-dawn-spacecraft',
+  sourceFileName: 'dawn-spacecraft',
 
   officialName: 'Dawn Spacecraft',
   commonName: 'Dawn',

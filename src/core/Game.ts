@@ -12,6 +12,7 @@ import type { ArtifactDefinition } from '../data/artifacts/Core/artifactTypes.ts
 import { ARTIFACTS_DATA } from '../data/artifacts/index.ts';
 import { ResourceManager } from '../systems/ResourceManager.ts';
 import { ReportManager } from '../systems/ReportManager.ts';
+import { RechargeManager } from '../systems/RechargeManager.ts';
 import { SaveManager } from '../systems/SaveManager.ts';
 import { RechargeUI } from '../ui/RechargeUI.ts';
 import { ReportDesignerUI } from '../ui/ReportDesignerUI.ts';
@@ -52,6 +53,8 @@ export class Game {
   private airlockTransitionEl: HTMLElement | null = null;
   private airlockAudioCtx: AudioContext | null = null;
   private missionAccomplishedModal: HTMLElement | null = null;
+  private lastEnergyAlertTime: number = 0;
+  private energyAlertIndex: number = 0;
 
   constructor(canvasId: string) {
     const canvasEl = document.getElementById(canvasId) as HTMLCanvasElement;
@@ -307,13 +310,13 @@ export class Game {
         <span class="pulse-dot-cyan"></span>
         <span id="post-archive-title">TELEMETRY ARCHIVED</span>
       </div>
-      <p class="post-archive-text">Suit energy cells depleted from traversal. Return to habitat cabin to recharge &amp; debrief?</p>
+      <p id="post-archive-text-body" class="post-archive-text">Suit energy cells depleted from traversal. Return to habitat cabin to recharge &amp; debrief?</p>
       <div class="post-archive-actions">
         <button id="btn-post-recharge" class="btn-primary glow-ready">
-          <kbd>R</kbd> ENTER CABIN &amp; RECHARGE
+          <kbd>R</kbd> <span id="btn-post-recharge-text">ENTER CABIN &amp; RECHARGE</span>
         </button>
         <button id="btn-post-continue" class="btn-secondary">
-          CONTINUE SURFACE SURVEY
+          <span id="btn-post-continue-text">CONTINUE SURFACE SURVEY</span>
         </button>
       </div>
     `;
@@ -323,12 +326,21 @@ export class Game {
     const btnContinue = this.postArchivePrompt.querySelector('#btn-post-continue');
 
     btnRecharge?.addEventListener('click', () => {
+      this.hud.hideReturnToShuttleCard();
       this.postArchivePrompt?.classList.add('hidden');
       this.startRechargeSequence();
     });
 
     btnContinue?.addEventListener('click', () => {
       this.postArchivePrompt?.classList.add('hidden');
+      if (this.gameState.artifactsCollected >= this.gameState.recoveryTarget) {
+        const isMars = this.gameState.currentLevel === GameLevel.MARS;
+        this.hud.showReturnToShuttleCard(
+          isMars ? 'DEEP SPACE LAUNCH READY' : 'MARS TAKEOFF READY',
+          'All 3 targets archived. Press [R] or click to board shuttle.',
+          () => this.startRechargeSequence()
+        );
+      }
     });
   }
 
@@ -429,6 +441,7 @@ export class Game {
     if (this.investigationUI.isOpen() || this.mapUI.isOpen() || this.rechargeUI.isOpen()) return;
 
     this.hud.hide();
+    this.hud.hideReturnToShuttleCard();
     this.postArchivePrompt?.classList.add('hidden');
     this.shelterPrompt?.classList.add('hidden');
     this.reportPrompt?.classList.add('hidden');
@@ -488,8 +501,6 @@ export class Game {
     const detectionState = env.currentDetectionState;
     if (detectionState.canInteract && detectionState.detectedArtifact) {
       const artifact = detectionState.detectedArtifact;
-      // Immediately silence sensor pings before the investigation sequence starts.
-      env.lunaDetection.stopRadarForInvestigation();
       // Start scanning sequence!
       this.investigationUI.startScanSequence(artifact);
     }
@@ -505,7 +516,13 @@ export class Game {
     if (!env || env.isLandingCinematic) return;
     if (this.investigationUI.isOpen() || this.mapUI.isOpen() || this.rechargeUI.isOpen()) return;
 
-    // Check if post-archive prompt is active, or if player is near shelter
+    // Check if return-to-shuttle card is active, or post-archive prompt is active, or player is near shelter
+    if (this.hud.isReturnToShuttleCardVisible()) {
+      this.hud.hideReturnToShuttleCard();
+      this.startRechargeSequence();
+      return;
+    }
+
     if (this.postArchivePrompt && !this.postArchivePrompt.classList.contains('hidden')) {
       this.startRechargeSequence();
       return;
@@ -547,12 +564,36 @@ export class Game {
     });
   }
 
+  private checkEnergyAlert(): void {
+    const now = Date.now();
+    // Alert at most once every 40 seconds
+    if (now - this.lastEnergyAlertTime < 40000) return;
+    this.lastEnergyAlertTime = now;
+
+    const isMars = this.gameState.currentLevel === GameLevel.MARS;
+    const alerts = isMars
+      ? [
+          '"Explorer, suit capacitors are down below 20%! Bounding in 38% gravity drains joules fast—head back to the Chryse shelter to recharge!"',
+          '"Warning: Oxygen compressor power is running thin. Our habitat airlock is waiting whenever you need a recharge [R]."',
+          '"Suit mobility servos are working on fumes, partner! Head to the shelter [R] to replenish vital cells before emergency reserves kick in."',
+        ]
+      : [
+          '"Explorer, suit capacitors dipped below 20%! Leaping over crater rims burns energy fast—let\'s route back to the cabin before emergency mode triggers."',
+          '"Warning: Regolith filter power is running low. The habitat airlock is open whenever you\'re ready to top off [R]."',
+          '"Suit batteries are groaning, partner! Even Armstrong needed to rest his boots. Head to the shelter [R] to replenish vital cells."',
+        ];
+
+    const alertMsg = alerts[this.energyAlertIndex % alerts.length];
+    this.energyAlertIndex += 1;
+    this.hud.showLunaAlert(alertMsg);
+  }
+
   private showRecuperationMessage(): void {
     const lines: DialogueLine[] = [
       {
         id: 'recup_1',
         speaker: 'EARTH CONTROL',
-        text: 'Explorer, your 10-day mission window has elapsed. Emergency recall procedures have been initiated. We are bringing you home.',
+        text: 'Explorer, your 15-day mission window has elapsed. Emergency recall procedures have been initiated. We are bringing you home.',
       },
       {
         id: 'recup_2',
@@ -584,11 +625,14 @@ export class Game {
     const env = this.getCurrentSurfaceEnv();
     if (env) {
       env.artifactManager.markCollected(artifact.id);
-      // Artifact collected — unlock sensor so it can ping for the next probe.
-      env.lunaDetection.resumeRadarForNewSearch();
     } else {
       artifact.isCollected = true;
     }
+
+    if (ARTIFACTS_DATA[artifact.id]) {
+      ARTIFACTS_DATA[artifact.id].isCollected = true;
+    }
+    RechargeManager.getInstance().setLastCollectedArtifact(artifact.id);
 
     this.gameState.artifactsCollected += 1;
     this.gameState.investigationPoints += artifact.rewards.basePoints;
@@ -611,66 +655,157 @@ export class Game {
       this.statusDisplay.style.color = '#f5b942';
     }
 
-    // 3. Celebratory discovery dialogue with Luna full of personality!
-    const celebrationDialogue: DialogueLine[] = isDeepSpace
-      ? [
+    // 3. Distinct celebratory discovery & recharge suggestion dialogues for EACH artifact!
+    let celebrationDialogue: DialogueLine[] = [];
+
+    if (isDeepSpace) {
+      celebrationDialogue = [
+        {
+          id: 'collect_deep_1',
+          speaker: 'LUNA',
+          text: `High-gain telemetry synchronized! The scientific recordings and history of ${artifact.commonName} are safely archived!`,
+          lunaExpression: 'happy',
+        },
+        {
+          id: 'collect_deep_2',
+          speaker: 'PLAYER',
+          text: `An incredible technological relic. To think this probe braved the asteroid belt and planetary radiation for decades.`,
+        },
+        {
+          id: 'collect_deep_3',
+          speaker: 'LUNA',
+          text: `Human ingenuity at its absolute peak! Press [T] to transmit our scientific findings to Earth Control, then open the Astrogation Map [M] to plot our next intercept trajectory!`,
+          lunaExpression: 'witty',
+        },
+      ];
+    } else if (isMars) {
+      if (artifact.id === 'viking-1-lander') {
+        celebrationDialogue = [
           {
-            id: 'collect_deep_1',
+            id: 'collect_viking_1',
             speaker: 'LUNA',
-            text: `High-gain telemetry synchronized! The scientific recordings and history of ${artifact.commonName} are safely archived!`,
+            text: `Viking 1's historic 1976 landing site is secured! Humanity's very first operational Mars surface laboratory is permanently saved in our archives!`,
             lunaExpression: 'happy',
           },
           {
-            id: 'collect_deep_2',
+            id: 'collect_viking_2',
             speaker: 'PLAYER',
-            text: `An incredible technological relic. To think this probe braved the asteroid belt and planetary radiation for decades.`,
+            text: `Standing beside those titanium struts was breathtaking. But ambient Martian temperature is plunging to minus seventy Celsius as dusk creeps in.`,
           },
           {
-            id: 'collect_deep_3',
+            id: 'collect_viking_3',
             speaker: 'LUNA',
-            text: `Human ingenuity at its absolute peak! Press [T] to transmit our scientific findings to Earth Control, then open the Astrogation Map [M] to plot our next intercept trajectory!`,
-            lunaExpression: 'witty',
-          },
-        ]
-      : isMars
-      ? [
-          {
-            id: 'collect_mars_1',
-            speaker: 'LUNA',
-            text: `Woohoo! High-gain telemetry locked! All data streams for the ${artifact.commonName} are encrypted into the Mars Heritage Archive!`,
-            lunaExpression: 'happy',
-          },
-          {
-            id: 'collect_mars_2',
-            speaker: 'PLAYER',
-            text: `Incredible piece of engineering. But man, this Martian dust gets everywhere, and my suit oxygen reserves are dipping.`,
-          },
-          {
-            id: 'collect_mars_3',
-            speaker: 'LUNA',
-            text: `Trekking in 38% gravity is no joke! We can head back inside the Chryse habitat cabin to recharge our batteries and debrief, or keep surveying the red plains. What's the call, partner?`,
-            lunaExpression: 'curious',
-          },
-        ]
-      : [
-          {
-            id: 'collect_1',
-            speaker: 'LUNA',
-            text: `Woohoo! High-bandwidth scan locked! All structural telemetry for the ${artifact.commonName} is safely encrypted into the archive!`,
-            lunaExpression: 'happy',
-          },
-          {
-            id: 'collect_2',
-            speaker: 'PLAYER',
-            text: `That was incredible. But check our suit vitals—my oxygen pumps are humming hard and my boots feel like lead weights.`,
-          },
-          {
-            id: 'collect_3',
-            speaker: 'LUNA',
-            text: `I told you bounding over craters burns energy fast! We can head back inside the habitat cabin to recharge our batteries and debrief, or keep surveying the surface. What's the call, partner?`,
+            text: `Brrr! Even my optoelectronic sensors are shivering! Let's step into the Chryse habitat cabin to defrost our suit heaters, recharge our power cells, and debrief on humanity's search for Martian life, or brave the red plains a bit longer!`,
             lunaExpression: 'curious',
           },
         ];
+      } else if (artifact.id === 'sojourner') {
+        celebrationDialogue = [
+          {
+            id: 'collect_sojourner_1',
+            speaker: 'LUNA',
+            text: `Sojourner is safe in the archives! The plucky little 23-pound skateboard that conquered Ares Vallis has its legacy sealed!`,
+            lunaExpression: 'happy',
+          },
+          {
+            id: 'collect_sojourner_2',
+            speaker: 'PLAYER',
+            text: `Seeing Barnacle Bill and Yogi rocks in person was unforgettable. But this fine iron oxide dust is getting into my suit knee hinges.`,
+          },
+          {
+            id: 'collect_sojourner_3',
+            speaker: 'LUNA',
+            text: `An air-shower decontamination and a full battery recharge in the Chryse shelter sound like heaven right now. We can debrief about the little rover's eighty-three sols of glory, or keep roving the red dunes! What's the play?`,
+            lunaExpression: 'witty',
+          },
+        ];
+      } else {
+        // Spirit Rover (3rd Mars Artifact - Level 2 complete!)
+        celebrationDialogue = [
+          {
+            id: 'collect_spirit_1',
+            speaker: 'LUNA',
+            text: `WOOHOO! That's THREE FOR THREE ON THE RED PLANET! Spirit, Sojourner, and Viking 1 are permanently archived into humanity's history!`,
+            lunaExpression: 'happy',
+          },
+          {
+            id: 'collect_spirit_2',
+            speaker: 'PLAYER',
+            text: `From Chryse Planitia to Gusev Crater, Mars is complete. What a journey.`,
+          },
+          {
+            id: 'collect_spirit_3',
+            speaker: 'LUNA',
+            text: `Earth Command just cleared our departure burn for LEVEL 3: DEEP SPACE! The spacecraft's research laboratory and ion drives are pre-heated on the pad. What's the call—return to the shuttle for takeoff to Deep Space, or stay and survey Gusev Crater?`,
+            lunaExpression: 'happy',
+          },
+        ];
+      }
+    } else {
+      // Moon Artifacts
+      if (artifact.id === 'a11-lm5-descent') {
+        celebrationDialogue = [
+          {
+            id: 'collect_eagle_1',
+            speaker: 'LUNA',
+            text: `Tranquility Base is recorded! Neil Armstrong and Buzz Aldrin's historic landing site is officially immortalized!`,
+            lunaExpression: 'happy',
+          },
+          {
+            id: 'collect_eagle_2',
+            speaker: 'PLAYER',
+            text: `Standing beside the Eagle's gold foil legs was completely surreal. But check our suit vitals—my oxygen scrubbers are buzzing and bounding over crater rims drains batteries fast.`,
+          },
+          {
+            id: 'collect_eagle_3',
+            speaker: 'LUNA',
+            text: `Your suit capacitors are down by 40%, Explorer! We can head back inside the habitat cabin to recharge our batteries and debrief about the Eagle's close-call landing, or keep surveying the Mare plains. What's the call, partner?`,
+            lunaExpression: 'curious',
+          },
+        ];
+      } else if (artifact.id === 'a12-lm6-ascent') {
+        celebrationDialogue = [
+          {
+            id: 'collect_alsep_1',
+            speaker: 'LUNA',
+            text: `Intrepid's impact site and the ALSEP geophone array are locked into the database! Did you feel that faint ground hum?`,
+            lunaExpression: 'happy',
+          },
+          {
+            id: 'collect_alsep_2',
+            speaker: 'PLAYER',
+            text: `The Moon ringing like a bell for over an hour after impact. But my boot actuators are feeling the strain of the regolith trek.`,
+          },
+          {
+            id: 'collect_alsep_3',
+            speaker: 'LUNA',
+            text: `Lunar basalt will give anyone's servos a workout! We can cycle the airlock to rest, top off our life support, and talk about Pete Conrad's lightning-struck ride, or keep exploring! What's the plan?`,
+            lunaExpression: 'witty',
+          },
+        ];
+      } else {
+        // Apollo 15 Falcon / LRV (3rd Moon Artifact - Level 1 complete!)
+        celebrationDialogue = [
+          {
+            id: 'collect_falcon_1',
+            speaker: 'LUNA',
+            text: `WOOHOO! That's THREE for three on the Moon, Explorer! Every single lunar monument is officially preserved in the archive!`,
+            lunaExpression: 'happy',
+          },
+          {
+            id: 'collect_falcon_2',
+            speaker: 'PLAYER',
+            text: `Tranquility Base, Intrepid's seismometer, and Falcon's lunar rover. The entire Apollo heritage sector is secure.`,
+          },
+          {
+            id: 'collect_falcon_3',
+            speaker: 'LUNA',
+            text: `Earth Command just transmitted interplanetary departure clearance! The shuttle's launch engines are primed for our Hohmann transfer burn to MARS! What's the call, partner—return to the shuttle for takeoff, or take a few extra minutes to survey the Hadley plains?`,
+            lunaExpression: 'happy',
+          },
+        ];
+      }
+    }
 
     setTimeout(() => {
       this.dialogueUI.startDialogue(celebrationDialogue, () => {
@@ -685,9 +820,45 @@ export class Game {
           }, 400);
         } else {
           // Show post-archive banner for surface missions
+          const isLevelComplete = this.gameState.artifactsCollected >= this.gameState.recoveryTarget;
+
           if (this.postArchivePrompt) {
             const titleEl = this.postArchivePrompt.querySelector('#post-archive-title');
-            if (titleEl) titleEl.textContent = `ARTIFACT ARCHIVED: ${artifact.commonName.toUpperCase()}`;
+            const textEl = this.postArchivePrompt.querySelector('#post-archive-text-body');
+            const btnRechargeText = this.postArchivePrompt.querySelector('#btn-post-recharge-text');
+            const btnContinueText = this.postArchivePrompt.querySelector('#btn-post-continue-text');
+
+            if (isLevelComplete) {
+              if (titleEl) {
+                titleEl.textContent = isMars
+                  ? 'LEVEL 2 COMPLETE // 3 MARTIAN PROBES SECURED'
+                  : 'LEVEL 1 COMPLETE // 3 LUNAR PROBES SECURED';
+              }
+              if (textEl) {
+                textEl.textContent = isMars
+                  ? 'All 3 Martian artifacts archived! The spacecraft is primed for departure burn to Level 3 Deep Space.'
+                  : 'All 3 Lunar artifacts archived! The shuttle is primed on the pad for Hohmann transfer takeoff to Mars.';
+              }
+              if (btnRechargeText) {
+                btnRechargeText.textContent = isMars ? 'RETURN TO SHUTTLE FOR DEEP SPACE TAKEOFF ▶' : 'RETURN TO SHUTTLE FOR MARS TAKEOFF ▶';
+              }
+              if (btnContinueText) {
+                btnContinueText.textContent = 'STAY & SURVEY SURFACE';
+              }
+
+              // Update the shelter proximity prompt as well
+              if (this.shelterPrompt) {
+                this.shelterPrompt.innerHTML = isMars
+                  ? `<kbd>R</kbd> BOARD SHUTTLE FOR DEEP SPACE TAKEOFF ▶`
+                  : `<kbd>R</kbd> BOARD SHUTTLE FOR MARS TAKEOFF ▶`;
+              }
+            } else {
+              if (titleEl) titleEl.textContent = `ARTIFACT ARCHIVED: ${artifact.commonName.toUpperCase()}`;
+              if (textEl) textEl.textContent = 'Suit energy cells depleted from traversal. Return to habitat cabin to recharge & debrief?';
+              if (btnRechargeText) btnRechargeText.textContent = 'ENTER CABIN & RECHARGE';
+              if (btnContinueText) btnContinueText.textContent = 'CONTINUE SURFACE SURVEY';
+            }
+
             this.postArchivePrompt.classList.remove('hidden');
           }
         }
@@ -995,34 +1166,54 @@ export class Game {
       {
         id: 'finale_1',
         speaker: 'LUNA',
-        text: "Explorer... look at our master telemetry board. All three deep space probes—NEAR Shoemaker, Dawn Spacecraft, and Pioneer 10—are verified and permanently encoded into the Solar Heritage Archive!",
+        text: "Explorer... look at our master telemetry board! All three deep space probes—NEAR Shoemaker, Dawn Spacecraft, and Pioneer 10—are verified and permanently encoded into the Solar Heritage Archive!",
         lunaExpression: 'happy',
       },
       {
         id: 'finale_2',
         speaker: 'PLAYER',
-        text: "From Armstrong's footprints in Tranquility Base, to Spirit's dragged wheel on Mars, to Pioneer 10 sailing into the interstellar deep with the Golden Plaque... every milestone of human exploration is preserved.",
+        text: "From Armstrong's footprints in Tranquility Base, to Spirit's lonely wheel tracks on Mars, to Pioneer 10 sailing into the interstellar deep with the Golden Plaque... every milestone of human exploration is preserved.",
       },
       {
         id: 'finale_3',
         speaker: 'EARTH CONTROL',
-        text: "Incoming priority transmission from Earth Command: 'To the crew of the Ghost Archive vessel: Outstanding work. You ventured where machines slept in the dark and brought our history home. Mission accomplished. Standing by for return trajectory.'",
+        text: "Priority carrier signal locked! Houston Flight Director to Ghost Archive crew: We copy your verified transmission. Outstanding work, team! You ventured into places forgotten by time and brought our history home.",
       },
       {
         id: 'finale_4',
-        speaker: 'LUNA',
-        text: "We really did it, partner! Every robotic pioneer, every human step into the void, is safe for future generations because of you. I couldn't have asked for a better explorer.",
-        lunaExpression: 'happy',
+        speaker: 'PLAYER',
+        text: "Thank you, Houston. We couldn't have pulled it off without Luna's sensors and the flight support team backing us every kilometer of the way.",
       },
       {
         id: 'finale_5',
-        speaker: 'PLAYER',
-        text: "Best co-pilot in the cosmos, Luna. Let's set a course for home.",
+        speaker: 'EARTH CONTROL',
+        text: "Flight Surgeon here, Explorer. Telemetry monitors show your cardiovascular and musculoskeletal systems need immediate terrestrial rehabilitation after months in microgravity and deep-space radiation. We are ordering a direct return trajectory to Earth for mandatory medical recuperation.",
       },
       {
         id: 'finale_6',
+        speaker: 'PLAYER',
+        text: "Mandatory recuperation sounds like heaven, Doc. Real gravity, fresh coastal air, and real food will feel like a miracle.",
+      },
+      {
+        id: 'finale_7',
+        speaker: 'EARTH CONTROL',
+        text: "Enjoy that rest while you can, Explorer. Because while you were recovering Pioneer 10, Deep Space Network antennas picked up anomalous telemetry from the outer moons—Titan, Europa, and signals whispering beyond the Kuiper Belt. Orbital Command is already staging a classified follow-up expedition. A new mission awaits you. Rest up... Part 2 of humanity's ghost archives is on the horizon.",
+      },
+      {
+        id: 'finale_8',
         speaker: 'LUNA',
-        text: "Earth trajectory synchronized! Engaging main thrusters for the journey home. Thank you, Explorer!",
+        text: "Did you hear that, partner?! Titan's liquid methane seas! Europa's hidden subterranean ocean! Voyager 1 and 2 out in interstellar space! A whole second chapter of ghosts waiting for us in the outer solar system!",
+        lunaExpression: 'alert',
+      },
+      {
+        id: 'finale_9',
+        speaker: 'PLAYER',
+        text: "A new mission on the horizon... Ghosts of Space: Part 2. But first, let's feel Earth's rain again. Houston, locking in retro-burn trajectory. Ghost Archive, coming home.",
+      },
+      {
+        id: 'finale_10',
+        speaker: 'LUNA',
+        text: "Trans-Earth injection burn plotted! Main engines spooling in 3... 2... 1... Hang on, Explorer! Earth, here we come! And to all the ghosts across the outer moons... we'll see you in Part 2!",
         lunaExpression: 'happy',
       },
     ];
@@ -1070,6 +1261,15 @@ export class Game {
         <div class="citation-title">MASTER SPACE ARCHAEOLOGIST &amp; PROTECTOR OF COSMIC HERITAGE</div>
         <p class="citation-desc">
           "For unmatched heroism and archaeological precision across the airless lunar basalt, the dusty winds of Chryse Planitia, and the deep outer void of the solar system. The ghosts of human exploration now shine forever in the archive."
+        </p>
+      </div>
+
+      <!-- Part 2 Sequel Teaser -->
+      <div class="finale-sequel-card">
+        <div class="sequel-badge">CLASSIFIED TELEMETRY DETECTED</div>
+        <div class="sequel-title">COMING SOON: GHOSTS OF SPACE &bull; PART 2</div>
+        <p class="sequel-desc">
+          "The Outer Moons &amp; The Interstellar Horizon &bull; Titan, Europa, Enceladus &amp; The Voyager Probes"
         </p>
       </div>
 
@@ -1167,6 +1367,9 @@ export class Game {
 
         // Resource update (dt = 0.15s since interval is 150ms)
         this.resourceManager.update(0.15, isMoving, isRunning);
+        if (this.resourceManager.isEnergyCritical()) {
+          this.checkEnergyAlert();
+        }
 
         this.hud.update(playerPos);
         this.hud.updateRadar(
@@ -1197,6 +1400,15 @@ export class Game {
 
           if (this.shelterPrompt) {
             if (this.isNearShelter && !wasNearShelter) {
+              const isLevelComplete = this.gameState.artifactsCollected >= this.gameState.recoveryTarget;
+              const isMars = this.gameState.currentLevel === GameLevel.MARS;
+              if (isLevelComplete) {
+                this.shelterPrompt.innerHTML = isMars
+                  ? `<kbd>R</kbd> BOARD SHUTTLE FOR DEEP SPACE TAKEOFF ▶`
+                  : `<kbd>R</kbd> BOARD SHUTTLE FOR MARS TAKEOFF ▶`;
+              } else {
+                this.shelterPrompt.innerHTML = `<kbd>R</kbd> ENTER HABITAT CABIN &amp; RECHARGE`;
+              }
               this.shelterPrompt.classList.remove('hidden');
             } else if (!this.isNearShelter && wasNearShelter) {
               this.shelterPrompt.classList.add('hidden');

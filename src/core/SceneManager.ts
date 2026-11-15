@@ -141,18 +141,8 @@ export class SceneManager {
       this.moonEnvironment.camera.camera.attachControl(canvas, true);
     }
 
-    // Place explorer beside the landed shuttle on lunar surface facing the spacecraft
-    const spawnPos = MoonEnvironment.SPAWN_POS;
-    this.moonEnvironment.astronaut.setPosition(spawnPos);
-    const dir = MoonEnvironment.SHUTTLE_CENTER.subtract(spawnPos);
-    dir.y = 0;
-    dir.normalize();
-    this.moonEnvironment.playerController.setFacing(dir);
-    if (this.moonEnvironment.camera?.camera) {
-      const alpha = Math.atan2(-dir.z, -dir.x);
-      this.moonEnvironment.camera.camera.target = spawnPos.add(new Vector3(0, 1.4, 0));
-      this.moonEnvironment.camera.camera.alpha = alpha;
-    }
+    // Place explorer right outside the lander ramp on surface
+    this.moonEnvironment.astronaut.setPosition(new Vector3(0, 0, 4.5));
     this.moonEnvironment.playerController.setEnabled(true);
 
     return this.moonEnvironment;

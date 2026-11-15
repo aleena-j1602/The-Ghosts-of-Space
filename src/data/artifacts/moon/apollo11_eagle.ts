@@ -6,6 +6,7 @@ import type { ArtifactDefinition } from '../../artifacts/Core/artifactTypes.ts';
 
 export const A11_LM5_DESCENT: ArtifactDefinition = {
   id: 'a11-lm5-descent',
+  sourceFileName: 'apollo11_eagle',
   officialName: 'Apollo 11 Lunar Module / EASEP (LM-5 "Eagle", descent stage)',
   commonName: 'Tranquility Base',
   aliases: ['Eagle', 'LM-5', 'Apollo 11 LM/EASEP', '04041', 'Apollo11EASEP'],

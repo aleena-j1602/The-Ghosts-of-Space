@@ -29,11 +29,6 @@ export class LunaDetection {
   // Radar control
   private radarMuted: boolean = false;
 
-  // Investigation/interaction lock — set when E is pressed at a probe.
-  // Unlike radarMuted, this is NOT cleared by auto-resume logic; it must be
-  // explicitly cleared by resumeRadarPing() called from outside (new search).
-  private investigationMuted: boolean = false;
-
   // UI callbacks
   private onAlertCallback?: (message: string) => void;
 
@@ -148,38 +143,12 @@ export class LunaDetection {
   }
 
   // --------------------------------------------------
-  // STOP RADAR DUE TO INVESTIGATION (E pressed at probe)
-  // Sets the investigation lock so auto-resume cannot re-enable pings.
-  // --------------------------------------------------
-
-  public stopRadarForInvestigation(): void {
-    this.investigationMuted = true;
-    this.stopRadarPing();
-    console.log('Luna radar ping locked for investigation.');
-  }
-
-  // --------------------------------------------------
   // RESUME RADAR SOUND
   // --------------------------------------------------
 
   public resumeRadarPing(): void {
-    // Only resume if the investigation lock is not active.
-    if (this.investigationMuted) return;
     this.radarMuted = false;
     this.lastPingTime = 0;
-  }
-
-  // --------------------------------------------------
-  // RESUME RADAR FOR A NEW SEARCH SEQUENCE
-  // Clears the investigation lock and re-enables pings.
-  // Call this when a new artifact search begins.
-  // --------------------------------------------------
-
-  public resumeRadarForNewSearch(): void {
-    this.investigationMuted = false;
-    this.radarMuted = false;
-    this.lastPingTime = 0;
-    console.log('Luna radar ping resumed for new search.');
   }
 
   // --------------------------------------------------
@@ -187,9 +156,8 @@ export class LunaDetection {
   // --------------------------------------------------
 
   public toggleMute(): boolean {
-    if (this.radarMuted || this.investigationMuted) {
-      // User explicitly re-enables sensor — clear all locks.
-      this.resumeRadarForNewSearch();
+    if (this.radarMuted) {
+      this.resumeRadarPing();
       return false;
     } else {
       this.stopRadarPing();
@@ -198,7 +166,7 @@ export class LunaDetection {
   }
 
   public isMuted(): boolean {
-    return this.radarMuted || this.investigationMuted;
+    return this.radarMuted;
   }
 
   // --------------------------------------------------

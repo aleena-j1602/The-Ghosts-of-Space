@@ -3,6 +3,7 @@ import type { ArtifactDefinition } from '../../artifacts/Core/artifactTypes.ts';
 
 export const SOJOURNER: ArtifactDefinition = {
   id: 'sojourner',
+  sourceFileName: 'sojourner',
   officialName: 'Mars Pathfinder Sojourner Rover',
   commonName: 'Sojourner Rover',
   aliases: [

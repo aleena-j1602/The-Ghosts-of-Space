@@ -28,7 +28,7 @@ export class RechargeUI {
           <span id="dock-status-label">HABITAT LIFE SUPPORT DOCKED</span>
         </div>
         <div class="dock-telemetry">
-          <span id="recharge-day-pill" class="highlight-amber">MISSION DAY 2 / 14</span>
+          <span id="recharge-day-pill" class="highlight-amber">MISSION DAY 2 / 15</span>
           <span class="pill-sep">&bull;</span>
           <span id="dock-sub-status" class="highlight-cyan">SYSTEMS 100% NOMINAL</span>
         </div>

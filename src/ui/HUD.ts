@@ -24,6 +24,13 @@ export class HUD {
   private lunaAlertBubble!: HTMLElement;
   private lunaAlertText!: HTMLElement;
 
+  // Shuttle Option Card
+  private returnToShuttleCard!: HTMLElement;
+  private shuttleCardTitle!: HTMLElement;
+  private shuttleCardSub!: HTMLElement;
+  private btnReturnShuttle!: HTMLElement;
+  private onReturnToShuttleCallback?: () => void;
+
   private onMapClickCallback?: () => void;
   private onToggleSensorMuteCallback?: () => void;
   private levelTagEl!: HTMLElement;
@@ -54,7 +61,7 @@ export class HUD {
         <div class="hud-mission-stats">
           <div class="stat-badge">
             <span class="label">MISSION DAY</span>
-            <span id="hud-mission-day" class="val highlight-amber">1 / 14</span>
+            <span id="hud-mission-day" class="val highlight-amber">1 / 15</span>
           </div>
           <div class="stat-badge">
             <span class="label">ARTIFACTS RECOVERED</span>
@@ -130,6 +137,18 @@ export class HUD {
             <span id="prompt-artifact-name" class="prompt-artifact-name">APOLLO 11 EAGLE</span>
           </div>
         </div>
+
+        <!-- Small Option Card near tracker: Return to Shuttle -->
+        <div id="return-to-shuttle-card" class="return-to-shuttle-card glass-card hidden">
+          <div class="shuttle-card-info">
+            <span class="shuttle-badge">LEVEL OBJECTIVE COMPLETE</span>
+            <span id="shuttle-card-title" class="shuttle-card-title">ALL 3 PROBES SECURED</span>
+            <span id="shuttle-card-sub" class="shuttle-card-sub">Shuttle primed for orbital departure</span>
+          </div>
+          <button id="btn-quick-return-shuttle" class="btn-return-shuttle glow-ready" type="button">
+            <kbd>R</kbd> <span>RETURN TO SHUTTLE ▶</span>
+          </button>
+        </div>
       </div>
 
       <!-- Bottom-Left: Minimap HUD -->
@@ -190,6 +209,19 @@ export class HUD {
     this.interactNameEl = this.container.querySelector('#prompt-artifact-name') as HTMLElement;
     this.lunaAlertBubble = this.container.querySelector('#luna-alert-bubble') as HTMLElement;
     this.lunaAlertText = this.container.querySelector('#luna-alert-text') as HTMLElement;
+
+    // Return to shuttle card elements
+    this.returnToShuttleCard = this.container.querySelector('#return-to-shuttle-card') as HTMLElement;
+    this.shuttleCardTitle = this.container.querySelector('#shuttle-card-title') as HTMLElement;
+    this.shuttleCardSub = this.container.querySelector('#shuttle-card-sub') as HTMLElement;
+    this.btnReturnShuttle = this.container.querySelector('#btn-quick-return-shuttle') as HTMLElement;
+
+    this.btnReturnShuttle?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (this.onReturnToShuttleCallback) {
+        this.onReturnToShuttleCallback();
+      }
+    });
 
     // Sensor mute elements
     this.radarMuteBtn = this.container.querySelector('#btn-radar-mute') as HTMLElement;
@@ -287,6 +319,28 @@ export class HUD {
         this.lunaAlertBubble.classList.add('hidden');
       }, 500);
     }, 4500);
+  }
+
+  public showReturnToShuttleCard(title: string, sub: string, onReturn?: () => void): void {
+    if (!this.returnToShuttleCard) return;
+    if (this.shuttleCardTitle) this.shuttleCardTitle.textContent = title;
+    if (this.shuttleCardSub) this.shuttleCardSub.textContent = sub;
+    if (onReturn) this.onReturnToShuttleCallback = onReturn;
+
+    this.returnToShuttleCard.classList.remove('hidden');
+    this.returnToShuttleCard.style.opacity = '1';
+  }
+
+  public hideReturnToShuttleCard(): void {
+    if (!this.returnToShuttleCard) return;
+    this.returnToShuttleCard.style.opacity = '0';
+    setTimeout(() => {
+      this.returnToShuttleCard?.classList.add('hidden');
+    }, 250);
+  }
+
+  public isReturnToShuttleCardVisible(): boolean {
+    return Boolean(this.returnToShuttleCard && !this.returnToShuttleCard.classList.contains('hidden'));
   }
 
   public updateRadar(detected: ArtifactDefinition | null, distance: number, signalStrength: number, canInteract: boolean): void {
