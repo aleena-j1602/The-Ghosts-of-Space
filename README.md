@@ -395,7 +395,10 @@ Browser Local Storage — Saving game progress and restoring player state.
 
 
 📦 Getting Started
-Prerequisites
+
+[Visit the website](https://ghosts-of-space.onrender.com)
+
+Local Deploy Prerequisites
 
 Make sure you have the following installed:
 
