@@ -26,6 +26,11 @@ import { ArtifactManager } from '../systems/ArtifactManager.ts';
 import { InputManager } from '../core/InputManager.ts';
 
 export class MoonEnvironment {
+  // Spawn and orientation configuration beside the shuttle
+  public static readonly SPAWN_POS = new Vector3(-7, 0, 7.5);
+  public static readonly LUNA_SPAWN_POS = new Vector3(-8.2, 1.8, 8.5);
+  public static readonly SHUTTLE_CENTER = new Vector3(-2, 1.5, 0);
+
   public scene: Scene;
 
   public astronaut!: AstronautCharacter;
@@ -98,13 +103,21 @@ export class MoonEnvironment {
       this.initLandingCinematic();
     } else {
       this.astronaut.setPosition(
-        new Vector3(0, 0, 4.5)
+        MoonEnvironment.SPAWN_POS
       );
+
+      const dir = MoonEnvironment.SHUTTLE_CENTER.subtract(MoonEnvironment.SPAWN_POS);
+      dir.y = 0;
+      dir.normalize();
+      const angle = Math.atan2(dir.x, dir.z);
+      this.astronaut.setRotationY(angle);
+      this.playerController.setFacing(dir);
 
       this.lunaFollower.setPosition(
-        new Vector3(1.2, 1.8, 3.8)
+        MoonEnvironment.LUNA_SPAWN_POS
       );
 
+      this.restoreGameplayCamera();
       this.playerController.setEnabled(true);
     }
 
@@ -427,8 +440,14 @@ export class MoonEnvironment {
     );
 
     this.astronaut.setPosition(
-      new Vector3(0, 0, 4.2)
+      MoonEnvironment.SPAWN_POS
     );
+
+    const dir = MoonEnvironment.SHUTTLE_CENTER.subtract(MoonEnvironment.SPAWN_POS);
+    dir.y = 0;
+    dir.normalize();
+    const angle = Math.atan2(dir.x, dir.z);
+    this.astronaut.setRotationY(angle);
 
     this.camera = new ThirdPersonCamera(
       this.scene,
@@ -441,6 +460,7 @@ export class MoonEnvironment {
       this.camera
     );
 
+    this.playerController.setFacing(dir);
     this.playerController.setEnabled(false);
 
     this.lunaFollower = new LunaFollower(
@@ -449,7 +469,7 @@ export class MoonEnvironment {
     );
 
     this.lunaFollower.setPosition(
-      new Vector3(1.5, 1.8, 3.2)
+      MoonEnvironment.LUNA_SPAWN_POS
     );
 
     this.lunaDetection = new LunaDetection(
@@ -504,13 +524,20 @@ export class MoonEnvironment {
     this.astronaut.root.setEnabled(true);
 
     this.astronaut.setPosition(
-      new Vector3(0, 0, 4.5)
+      MoonEnvironment.SPAWN_POS
     );
+
+    const dir = MoonEnvironment.SHUTTLE_CENTER.subtract(MoonEnvironment.SPAWN_POS);
+    dir.y = 0;
+    dir.normalize();
+    const angle = Math.atan2(dir.x, dir.z);
+    this.astronaut.setRotationY(angle);
+    this.playerController.setFacing(dir);
 
     this.lunaFollower.luna.root.setEnabled(true);
 
     this.lunaFollower.setPosition(
-      new Vector3(1.2, 1.8, 3.8)
+      MoonEnvironment.LUNA_SPAWN_POS
     );
 
     this.lunaFollower.setExpression('happy');
@@ -523,15 +550,16 @@ export class MoonEnvironment {
   }
 
   private restoreGameplayCamera(): void {
+    const dir = MoonEnvironment.SHUTTLE_CENTER.subtract(MoonEnvironment.SPAWN_POS);
+    dir.y = 0;
+    dir.normalize();
+    const alpha = Math.atan2(-dir.z, -dir.x);
+
     this.camera.camera.radius = 6.5;
     this.camera.camera.beta = Math.PI / 2.7;
-    this.camera.camera.alpha = -Math.PI / 2;
+    this.camera.camera.alpha = alpha;
 
-    this.camera.camera.target = new Vector3(
-      0,
-      1.5,
-      0
-    );
+    this.camera.camera.target = MoonEnvironment.SPAWN_POS.add(new Vector3(0, 1.4, 0));
   }
 
   // --------------------------------------------------

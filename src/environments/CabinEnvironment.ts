@@ -763,9 +763,13 @@ export class CabinEnvironment {
         this.astronautRoot.scaling.setAll(scaleFactor);
       }
 
-      // Reclined comfortably inside berth
-      this.astronautRoot.position = new Vector3(0, 0.48, -1.78);
-      this.astronautRoot.rotation = new Vector3(-1.18, 0, 0);
+      // Reclined in the hibernation berth:
+      // feet resting on the leg-rest pad (z ≈ -0.9), head at the
+      // headrest pillow (z ≈ -2.67), body nearly horizontal (≈ 80°).
+      // rotation.x is positive so the model's +Y axis (head) tilts
+      // toward -Z (back wall / camera), not toward the cockpit.
+      this.astronautRoot.position = new Vector3(0, 0.57, -0.90);
+      this.astronautRoot.rotation = new Vector3(1.40, 0, 0);
 
       console.log(
         '[CabinEnvironment] Astronaut character positioned in hibernation berth.'

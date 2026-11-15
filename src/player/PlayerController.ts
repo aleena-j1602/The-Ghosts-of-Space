@@ -31,6 +31,16 @@ export class PlayerController {
     this.isEnabled = enabled;
   }
 
+  public setFacing(direction: Vector3): void {
+    if (direction.lengthSquared() > 0.001) {
+      this.currentFacing.copyFrom(direction);
+      this.currentFacing.y = 0;
+      this.currentFacing.normalize();
+      const angle = Math.atan2(this.currentFacing.x, this.currentFacing.z);
+      this.character.setRotationY(angle);
+    }
+  }
+
   public update(deltaTime: number): void {
     if (!this.isEnabled) {
       this.character.update(deltaTime, false, false);

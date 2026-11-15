@@ -488,6 +488,8 @@ export class Game {
     const detectionState = env.currentDetectionState;
     if (detectionState.canInteract && detectionState.detectedArtifact) {
       const artifact = detectionState.detectedArtifact;
+      // Immediately silence sensor pings before the investigation sequence starts.
+      env.lunaDetection.stopRadarForInvestigation();
       // Start scanning sequence!
       this.investigationUI.startScanSequence(artifact);
     }
@@ -582,6 +584,8 @@ export class Game {
     const env = this.getCurrentSurfaceEnv();
     if (env) {
       env.artifactManager.markCollected(artifact.id);
+      // Artifact collected — unlock sensor so it can ping for the next probe.
+      env.lunaDetection.resumeRadarForNewSearch();
     } else {
       artifact.isCollected = true;
     }
