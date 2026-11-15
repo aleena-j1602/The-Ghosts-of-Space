@@ -7,9 +7,11 @@ export class CinematicClosingUI {
   private audioCtx: AudioContext | null = null;
   private audioInterval: number | null = null;
   private isMuted: boolean = false;
+  private useSyntheticTheme: boolean = true;
 
   private onRestartCallback?: () => void;
   private onFreeRoamCallback?: () => void;
+  private onStopAudioCallback?: () => void;
 
   constructor() {
     this.container = document.createElement('div');
@@ -194,7 +196,17 @@ export class CinematicClosingUI {
     }
   }
 
+  public disableSyntheticAudio(): void {
+    this.useSyntheticTheme = false;
+    this.stopAudio();
+  }
+
+  public setOnStopAudio(cb: () => void): void {
+    this.onStopAudioCallback = cb;
+  }
+
   private startCinematicTheme(): void {
+    if (!this.useSyntheticTheme) return;
     try {
       this.initAudio();
       if (!this.audioCtx) return;
@@ -245,10 +257,13 @@ export class CinematicClosingUI {
     }
   }
 
-  private stopAudio(): void {
+  public stopAudio(): void {
     if (this.audioInterval) {
       clearInterval(this.audioInterval);
       this.audioInterval = null;
+    }
+    if (this.onStopAudioCallback) {
+      this.onStopAudioCallback();
     }
   }
 

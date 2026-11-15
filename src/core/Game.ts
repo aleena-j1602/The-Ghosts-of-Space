@@ -56,6 +56,16 @@ export class Game {
   private lastEnergyAlertTime: number = 0;
   private energyAlertIndex: number = 0;
 
+  // Soundtrack audio state & synchronization
+  private nebulaAudio: HTMLAudioElement | null = null;
+  private endingAudio: HTMLAudioElement | null = null;
+  private musicVolume: number = 0.55;
+  private hasNebulaIntroPlayed: boolean = false;
+  private hasSilentUniversePlayed: boolean = false;
+  private isNebulaFading: boolean = false;
+  private isIntroCinematicActive: boolean = false;
+  private userGestureCleanup: (() => void) | null = null;
+
   constructor(canvasId: string) {
     const canvasEl = document.getElementById(canvasId) as HTMLCanvasElement;
     if (!canvasEl) {
@@ -96,6 +106,7 @@ export class Game {
     this.setupShelterPrompts();
     this.setupAirlockTransition();
     this.setupPostArchivePrompt();
+    this.initSoundtracks();
   }
 
   private setupUIBindings(): void {
@@ -162,6 +173,11 @@ export class Game {
     this.introUI.setOnConfirmMission(() => {
       this.transitionToMoonLanding();
     });
+
+    // Ensure intro music is smoothly silenced before any dialogue begins
+    this.dialogueUI.setOnBeforeDialogueStart(() => {
+      this.stopNebulaIntro(false);
+    });
   }
 
   private setupInvestigationEvents(): void {
@@ -177,7 +193,13 @@ export class Game {
   }
 
   private setupClosingCinematicEvents(): void {
+    this.cinematicClosingUI.setOnStopAudio(() => {
+      this.stopEndingSoundtrack();
+    });
+
     this.cinematicClosingUI.setOnRestart(() => {
+      this.stopEndingSoundtrack();
+      this.stopNebulaIntro(false);
       window.location.reload();
     });
 
@@ -872,6 +894,9 @@ export class Game {
     }
 
     this.sceneManager.switchToCabin(() => {
+      // Smoothly fade out opening music before Luna begins speaking
+      this.stopNebulaIntro(true);
+
       const luna = this.sceneManager.getLunaCharacter();
       this.dialogueUI.setLuna(luna);
 
@@ -1297,6 +1322,17 @@ export class Game {
     this.shelterPrompt?.classList.add('hidden');
     this.reportPrompt?.classList.add('hidden');
 
+    // Ensure any leftover opening audio or radar pings are stopped
+    this.stopNebulaIntro(false);
+    const surface = this.getCurrentSurfaceEnv();
+    surface?.lunaDetection?.stopRadarPing();
+
+    // Authoritative check: Start Silent Universe ONLY when every required task across all 3 environments is completed
+    if (this.areAllTasksCompletedAcrossEnvironments()) {
+      this.cinematicClosingUI.disableSyntheticAudio();
+      this.startEndingSoundtrack();
+    }
+
     if (this.statusDisplay) {
       this.statusDisplay.textContent = 'CINEMATIC // RETRO-PROPULSION TO EARTH ORBIT';
       this.statusDisplay.style.color = '#46d9e8';
@@ -1315,6 +1351,9 @@ export class Game {
   }
 
   public start(): void {
+    // Start Nebula intro track from the first frame of the opening cinematic
+    this.startNebulaIntro();
+
     const spaceEnv = this.sceneManager.initSpaceCinematic();
     this.introUI.showTitle();
 
@@ -1443,5 +1482,180 @@ export class Game {
 
   public getSceneManager(): SceneManager {
     return this.sceneManager;
+  }
+
+  // =========================================================================
+  // SOUNDTRACK & STORY AUDIO SYNCHRONIZATION
+  // =========================================================================
+
+  private initSoundtracks(): void {
+    try {
+      this.nebulaAudio = new Audio('/audio/nebula-intro.mp3');
+      this.nebulaAudio.volume = this.musicVolume;
+      this.nebulaAudio.loop = false;
+      this.nebulaAudio.preload = 'auto';
+
+      // Fallback path in case of base path difference
+      this.nebulaAudio.addEventListener(
+        'error',
+        () => {
+          if (this.nebulaAudio && !this.nebulaAudio.src.includes('publicaudio')) {
+            this.nebulaAudio.src = 'audio/nebula-intro.mp3';
+            this.nebulaAudio.load();
+          }
+        },
+        { once: true }
+      );
+
+      this.endingAudio = new Audio('/audio/silent-universe-ending.mp3');
+      this.endingAudio.volume = this.musicVolume;
+      this.endingAudio.loop = false;
+      this.endingAudio.preload = 'auto';
+
+      this.endingAudio.addEventListener(
+        'error',
+        () => {
+          if (this.endingAudio && !this.endingAudio.src.includes('publicaudio')) {
+            this.endingAudio.src = 'audio/silent-universe-ending.mp3';
+            this.endingAudio.load();
+          }
+        },
+        { once: true }
+      );
+    } catch (err) {
+      console.warn('[Audio] Failed to initialize soundtrack audio elements:', err);
+    }
+  }
+
+  public startNebulaIntro(): void {
+    if (this.hasNebulaIntroPlayed || !this.nebulaAudio) return;
+    this.hasNebulaIntroPlayed = true;
+    this.isIntroCinematicActive = true;
+    this.nebulaAudio.currentTime = 0;
+    this.nebulaAudio.volume = this.musicVolume;
+
+    const playPromise = this.nebulaAudio.play();
+    if (playPromise !== undefined) {
+      playPromise.catch((err) => {
+        console.warn('[Audio] Autoplay restricted by browser policy; awaiting user interaction:', err);
+        const resumeOnGesture = () => {
+          if (
+            this.isIntroCinematicActive &&
+            !this.isNebulaFading &&
+            this.nebulaAudio &&
+            this.nebulaAudio.paused
+          ) {
+            this.nebulaAudio.play().catch(() => {});
+          }
+          if (this.userGestureCleanup) {
+            this.userGestureCleanup();
+            this.userGestureCleanup = null;
+          }
+        };
+
+        const cleanup = () => {
+          window.removeEventListener('pointerdown', resumeOnGesture);
+          window.removeEventListener('keydown', resumeOnGesture);
+          window.removeEventListener('click', resumeOnGesture);
+        };
+        this.userGestureCleanup = cleanup;
+
+        window.addEventListener('pointerdown', resumeOnGesture, { once: true });
+        window.addEventListener('keydown', resumeOnGesture, { once: true });
+        window.addEventListener('click', resumeOnGesture, { once: true });
+      });
+    }
+  }
+
+  public stopNebulaIntro(smooth: boolean = true): void {
+    this.isIntroCinematicActive = false;
+    if (this.userGestureCleanup) {
+      this.userGestureCleanup();
+      this.userGestureCleanup = null;
+    }
+
+    if (!this.nebulaAudio) return;
+
+    if (!smooth || this.nebulaAudio.paused) {
+      this.isNebulaFading = false;
+      this.nebulaAudio.pause();
+      this.nebulaAudio.currentTime = 0;
+      return;
+    }
+
+    if (this.isNebulaFading) return;
+    this.isNebulaFading = true;
+
+    const startVol = this.nebulaAudio.volume;
+    const fadeDuration = 500;
+    const startTime = performance.now();
+
+    const fadeStep = () => {
+      if (!this.nebulaAudio) return;
+      const elapsed = performance.now() - startTime;
+      const progress = Math.min(elapsed / fadeDuration, 1.0);
+      this.nebulaAudio.volume = Math.max(0, startVol * (1 - progress));
+
+      if (progress < 1.0 && !this.nebulaAudio.paused) {
+        requestAnimationFrame(fadeStep);
+      } else {
+        this.nebulaAudio.pause();
+        this.nebulaAudio.currentTime = 0;
+        this.nebulaAudio.volume = this.musicVolume;
+        this.isNebulaFading = false;
+      }
+    };
+    requestAnimationFrame(fadeStep);
+  }
+
+  public areAllTasksCompletedAcrossEnvironments(): boolean {
+    // Authoritative task registry: verify all required artifacts across Moon, Mars & Deep Space
+    const requiredMoonIds = ['a11-lm5-descent', 'a12-lm6-ascent', 'a15-lm10-ascent'];
+    const requiredMarsIds = ['viking-1-lander', 'sojourner', 'spirit'];
+    const requiredDeepSpaceIds = ['dawn-spacecraft', 'near-shoemaker', 'pioneer-10'];
+
+    const moonComplete = requiredMoonIds.every((id) => ARTIFACTS_DATA[id]?.isCollected === true);
+    const marsComplete = requiredMarsIds.every((id) => ARTIFACTS_DATA[id]?.isCollected === true);
+    const deepSpaceComplete = requiredDeepSpaceIds.every((id) => ARTIFACTS_DATA[id]?.isCollected === true);
+
+    return moonComplete && marsComplete && deepSpaceComplete;
+  }
+
+  public startEndingSoundtrack(): void {
+    if (this.hasSilentUniversePlayed || !this.endingAudio) return;
+    this.hasSilentUniversePlayed = true;
+
+    // Stop any other background music before starting this track
+    this.stopNebulaIntro(false);
+
+    this.endingAudio.currentTime = 0;
+    this.endingAudio.volume = this.musicVolume;
+    const playPromise = this.endingAudio.play();
+    if (playPromise !== undefined) {
+      playPromise.catch((err) => {
+        console.warn('[Audio] Ending soundtrack autoplay prevented by browser policy:', err);
+      });
+    }
+  }
+
+  public stopEndingSoundtrack(): void {
+    if (this.endingAudio) {
+      this.endingAudio.pause();
+      this.endingAudio.currentTime = 0;
+    }
+  }
+
+  public setMusicVolume(volume: number): void {
+    this.musicVolume = Math.max(0, Math.min(1, volume));
+    if (this.nebulaAudio) {
+      this.nebulaAudio.volume = this.musicVolume;
+    }
+    if (this.endingAudio) {
+      this.endingAudio.volume = this.musicVolume;
+    }
+  }
+
+  public getMusicVolume(): number {
+    return this.musicVolume;
   }
 }

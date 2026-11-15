@@ -16,6 +16,7 @@ export class DialogueUI {
   private onCompleteCallback: (() => void) | null = null;
   private lunaRef: LunaCharacter | null = null;
   private audioCtx: AudioContext | null = null;
+  private onBeforeDialogueStartCallback: ((lines: DialogueLine[]) => void) | null = null;
 
   constructor() {
     this.container = document.createElement('div');
@@ -123,8 +124,15 @@ export class DialogueUI {
     this.lunaRef = luna;
   }
 
+  public setOnBeforeDialogueStart(cb: (lines: DialogueLine[]) => void): void {
+    this.onBeforeDialogueStartCallback = cb;
+  }
+
   public startDialogue(lines: DialogueLine[], onComplete?: () => void): void {
     if (lines.length === 0) return;
+    if (this.onBeforeDialogueStartCallback) {
+      this.onBeforeDialogueStartCallback(lines);
+    }
     this.currentLines = lines;
     this.currentIndex = 0;
     this.onCompleteCallback = onComplete || null;
