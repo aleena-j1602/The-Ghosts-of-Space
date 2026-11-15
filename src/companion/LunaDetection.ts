@@ -2,6 +2,7 @@
 import { Vector3 } from '@babylonjs/core';
 import { LunaFollower } from './LunaFollower.ts';
 import type { ArtifactDefinition } from '../data/artifacts/Core/artifactTypes.ts';
+import { SettingsManager } from '../systems/SettingsManager.ts';
 
 export interface DetectionState {
   detectedArtifact: ArtifactDefinition | null;
@@ -28,6 +29,10 @@ export class LunaDetection {
 
   // Radar control
   private radarMuted: boolean = false;
+
+  // Investigation/interaction lock — set when E is pressed at a probe.
+  // Prevents auto-resume logic from restarting pings during investigation.
+  private investigationMuted: boolean = false;
 
   // UI callbacks
   private onAlertCallback?: (message: string) => void;
@@ -95,10 +100,13 @@ export class LunaDetection {
         now + 0.08
       );
 
-      gain.gain.setValueAtTime(0.04, now);
+      const sfxVol = SettingsManager.getInstance().getEffectiveSfxVolume();
+      if (sfxVol <= 0.001) return;
+
+      gain.gain.setValueAtTime(0.04 * sfxVol, now);
 
       gain.gain.exponentialRampToValueAtTime(
-        0.001,
+        0.001 * sfxVol,
         now + 0.12
       );
 
@@ -121,14 +129,10 @@ export class LunaDetection {
   }
 
   // --------------------------------------------------
-  // STOP RADAR SOUND
+  // STOP ACTIVE OSCILLATORS
   // --------------------------------------------------
 
-  public stopRadarPing(): void {
-    // Prevent any further pings for this artifact.
-    this.radarMuted = true;
-
-    // Immediately stop all currently playing pings.
+  public stopActiveOscillators(): void {
     this.activeOscillators.forEach((osc) => {
       try {
         osc.stop();
@@ -136,10 +140,29 @@ export class LunaDetection {
         // Oscillator may already be stopped.
       }
     });
-
     this.activeOscillators.clear();
+  }
 
+  // --------------------------------------------------
+  // STOP RADAR SOUND
+  // --------------------------------------------------
+
+  public stopRadarPing(): void {
+    // Prevent any further pings for this artifact.
+    this.radarMuted = true;
+    this.stopActiveOscillators();
     console.log('Luna radar ping stopped.');
+  }
+
+  // --------------------------------------------------
+  // STOP RADAR DUE TO INVESTIGATION (E pressed at probe)
+  // Sets the investigation lock so auto-resume cannot re-enable pings.
+  // --------------------------------------------------
+
+  public stopRadarForInvestigation(): void {
+    this.investigationMuted = true;
+    this.stopActiveOscillators();
+    console.log('Luna radar ping locked for investigation.');
   }
 
   // --------------------------------------------------
@@ -147,8 +170,23 @@ export class LunaDetection {
   // --------------------------------------------------
 
   public resumeRadarPing(): void {
+    // Only resume if the investigation lock is not active.
+    if (this.investigationMuted) return;
     this.radarMuted = false;
     this.lastPingTime = 0;
+  }
+
+  // --------------------------------------------------
+  // RESUME RADAR FOR A NEW SEARCH SEQUENCE
+  // Clears the investigation lock and re-enables pings.
+  // Call this when a new artifact search begins or artifact is collected.
+  // --------------------------------------------------
+
+  public resumeRadarForNewSearch(): void {
+    this.investigationMuted = false;
+    this.radarMuted = false;
+    this.lastPingTime = 0;
+    console.log('Luna radar ping resumed for new search.');
   }
 
   // --------------------------------------------------
@@ -156,8 +194,8 @@ export class LunaDetection {
   // --------------------------------------------------
 
   public toggleMute(): boolean {
-    if (this.radarMuted) {
-      this.resumeRadarPing();
+    if (this.radarMuted || this.investigationMuted) {
+      this.resumeRadarForNewSearch();
       return false;
     } else {
       this.stopRadarPing();
@@ -166,7 +204,7 @@ export class LunaDetection {
   }
 
   public isMuted(): boolean {
-    return this.radarMuted;
+    return this.radarMuted || this.investigationMuted;
   }
 
   // --------------------------------------------------
@@ -242,8 +280,9 @@ export class LunaDetection {
       this.lunaFollower.setExpression('alert');
 
       // Periodic audio radar ping.
-      // Only play if radar has not been muted.
-      if (!this.radarMuted) {
+      // Only play if radar has not been muted, investigation lock is not active,
+      // and the player has not yet reached the site's interaction radius.
+      if (!this.radarMuted && !this.investigationMuted && minDistance > this.interactRadius) {
 
         const now = performance.now();
 
@@ -256,6 +295,9 @@ export class LunaDetection {
           this.playRadarPing(signalStrength);
           this.lastPingTime = now;
         }
+      } else if (minDistance <= this.interactRadius) {
+        // Automatically deactivate active detection pings when player reaches the site
+        this.stopActiveOscillators();
       }
 
       // First-time vocal alert from Luna.

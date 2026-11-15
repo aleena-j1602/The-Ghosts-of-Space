@@ -7,3 +7,4 @@ export * from './MapUI.ts';
 export * from './RechargeUI.ts';
 export * from './ReportDesignerUI.ts';
 export * from './CinematicClosingUI.ts';
+export * from './PauseMenuUI.ts';

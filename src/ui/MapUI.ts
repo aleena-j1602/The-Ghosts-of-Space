@@ -16,6 +16,7 @@ export class MapUI {
   private playerForward: Vector3 = new Vector3(0, 0, 1);
   private detectedArtifactId: string | null = null;
   private onDeepSpaceProbeSelected?: (probe: ArtifactDefinition) => void;
+  private hideTimeout: number | null = null;
 
   constructor() {
     this.container = document.createElement('div');
@@ -81,17 +82,9 @@ export class MapUI {
   }
 
   private bindEvents(): void {
-    this.closeBtn.addEventListener('click', () => {
+    this.closeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
       this.hide();
-    });
-
-    window.addEventListener('keydown', (e: KeyboardEvent) => {
-      if (e.code === 'KeyM') {
-        // Toggle map
-        this.toggle();
-      } else if (e.code === 'Escape' && this.isVisible) {
-        this.hide();
-      }
     });
   }
 
@@ -131,6 +124,10 @@ export class MapUI {
   }
 
   public show(): void {
+    if (this.hideTimeout !== null) {
+      clearTimeout(this.hideTimeout);
+      this.hideTimeout = null;
+    }
     this.isVisible = true;
     this.container.classList.remove('hidden');
     this.container.style.opacity = '1';
@@ -138,10 +135,15 @@ export class MapUI {
   }
 
   public hide(): void {
+    if (this.hideTimeout !== null) {
+      clearTimeout(this.hideTimeout);
+      this.hideTimeout = null;
+    }
     this.isVisible = false;
     this.container.style.opacity = '0';
-    setTimeout(() => {
+    this.hideTimeout = window.setTimeout(() => {
       this.container.classList.add('hidden');
+      this.hideTimeout = null;
     }, 300);
   }
 

@@ -9,9 +9,22 @@ export class CinematicClosingUI {
   private isMuted: boolean = false;
   private useSyntheticTheme: boolean = true;
 
+  // Auto-scroll animation state for Phase 3
+  private scrollAnimId: number | null = null;
+  private isScrollPaused: boolean = false;
+  private scrollSpeedMultiplier: number = 1.0;
+  private lastScrollTimestamp: number = 0;
+
+  // Callbacks
   private onRestartCallback?: () => void;
+  private onReturnToMainMenuCallback?: () => void;
   private onFreeRoamCallback?: () => void;
   private onStopAudioCallback?: () => void;
+
+  // Cached DOM elements
+  private creditsViewport: HTMLElement | null = null;
+  private btnScrollPause: HTMLElement | null = null;
+  private btnScrollSpeed: HTMLElement | null = null;
 
   constructor() {
     this.container = document.createElement('div');
@@ -54,7 +67,7 @@ export class CinematicClosingUI {
           </div>
 
           <div class="phase-actions">
-            <button id="btn-next-phase-1" class="btn-primary glow-ready">
+            <button id="btn-next-phase-1" class="btn-primary glow-ready" type="button">
               VIEW EXPEDITION TELEMETRY ROSTER ▶
             </button>
           </div>
@@ -124,61 +137,172 @@ export class CinematicClosingUI {
           </div>
 
           <div class="phase-actions">
-            <button id="btn-next-phase-2" class="btn-primary glow-ready">
-              CONCLUDE EXPEDITION &bull; FINAL TRANSMISSION ▶
+            <button id="btn-next-phase-2" class="btn-primary glow-ready" type="button">
+              ROLL FINAL CREDITS ▶
             </button>
           </div>
         </div>
       </div>
 
-      <!-- Phase 3: Game Over & Final Farewell -->
+      <!-- Phase 3: Dedicated Cinematic Scrolling Credits Experience -->
       <div id="closing-phase-3" class="closing-phase hidden">
-        <div class="closing-final-card glass-card">
-          <div class="final-badge-pill">EXPEDITION CONCLUDED &bull; ARCHIVE SECURED</div>
-          <h1 class="final-game-title">GHOSTS OF SPACE</h1>
-          <div class="final-game-over">GAME OVER</div>
-          <p class="final-subheading">HUMANITY'S SOLAR HERITAGE PERMANENTLY PRESERVED</p>
-
-          <blockquote class="final-quote-box">
-            <p>&ldquo;Somewhere, something incredible is waiting to be known.&rdquo;</p>
-            <cite>&mdash; Carl Sagan, Astronomer &amp; Planetary Scientist</cite>
-          </blockquote>
-
-          <div class="final-credits">
-            <div class="credit-entry">
-              <span class="credit-role">Concept, Design &amp; Archaeology Simulation</span>
-              <span class="credit-name">Ghosts of Space Expedition</span>
-            </div>
-            <div class="credit-entry">
-              <span class="credit-role">Mission Telemetry &amp; Historical Archives</span>
-              <span class="credit-name">NASA / JPL / Ames Research Center / JHU-APL</span>
-            </div>
-            <div class="credit-entry">
-              <span class="credit-role">Autonomous Companion Diagnostics</span>
-              <span class="credit-name">LUNA AI System</span>
-            </div>
+        <div class="credits-cinema-wrapper">
+          <!-- Top Speed / Play Controls -->
+          <div class="credits-controls-bar">
+            <button id="btn-credits-pause" class="btn-credits-ctrl" type="button">⏸ PAUSE SCROLL</button>
+            <button id="btn-credits-speed" class="btn-credits-ctrl" type="button">⚡ 2X SPEED</button>
+            <button id="btn-credits-skip" class="btn-credits-ctrl" type="button">⏭ JUMP TO CONCLUSION</button>
           </div>
 
-          <!-- Sequel Teaser -->
-          <div class="closing-sequel-card">
-            <span class="sequel-pill">CHAPTER 2 IN DEVELOPMENT</span>
-            <h3 class="sequel-headline">GHOSTS OF SPACE: PART 2</h3>
-            <p class="sequel-text">New Expeditions Await Across Titan, Europa, and the Kuiper Belt Probes.</p>
-          </div>
+          <!-- Scrolling Credits Content Window -->
+          <div id="credits-scroll-viewport" class="credits-scroll-viewport">
+            <div id="credits-scroll-track" class="credits-scroll-track">
+              <!-- PROJECT TITLE -->
+              <div class="credit-block title-block">
+                <div class="credit-subtitle">PROJECT</div>
+                <h1 class="credit-main-title">GHOSTS OF SPACE</h1>
+                <p class="credit-tagline">&ldquo;Abandoned, but not Forgotten. Every Machine Has a Story Worth Telling.&rdquo;</p>
+                <p class="credit-synopsis">An interactive space archaeology experience exploring the forgotten machines that helped humanity discover the Moon, Mars and beyond.</p>
+              </div>
 
-          <div class="final-interactive-actions">
-            <button id="btn-closing-restart" class="btn-primary glow-ready">
-              ↺ RESTART EXPEDITION (PLAY AGAIN)
-            </button>
-            <button id="btn-closing-freeroam" class="btn-secondary">
-              OBSERVE ORBITAL DESCENT (CAMERA VIEW)
-            </button>
+              <!-- DEVELOPED BY -->
+              <div class="credit-block">
+                <div class="credit-section-tag">DEVELOPED BY</div>
+                <h2 class="credit-group-title">TEAM SPACE VENTURA</h2>
+                <ul class="credit-names-list">
+                  <li>Aleena Joseph</li>
+                  <li>Adhwaith Jayaprakash</li>
+                  <li>Alen Johnson</li>
+                  <li>Dhruva C.</li>
+                </ul>
+              </div>
+
+              <!-- CREATED FOR -->
+              <div class="credit-block">
+                <div class="credit-section-tag">CREATED FOR</div>
+                <h2 class="credit-group-title">NASA SPACE APPS CHALLENGE 2026</h2>
+                <p class="credit-challenge-name">Challenge: Abandoned but not Forgotten: Storytelling about NASA's Discarded Equipment on the Moon and Mars.</p>
+              </div>
+
+              <!-- TECHNOLOGY -->
+              <div class="credit-block">
+                <div class="credit-section-tag">TECHNOLOGY</div>
+                <ul class="credit-items-list">
+                  <li><strong>Babylon.js 7.50</strong> &mdash; 3D Real-Time WebGL Rendering Engine</li>
+                  <li><strong>TypeScript 5.7</strong> &mdash; Type-Safe Simulation &amp; Mission Architecture</li>
+                  <li><strong>Vite 6.0</strong> &mdash; Frontend Tooling &amp; Production Pipeline</li>
+                  <li><strong>HTML5 Canvas &amp; Web Audio API</strong> &mdash; Procedural Radar &amp; Telemetry Audio</li>
+                  <li><strong>Modern CSS3</strong> &mdash; Cybernetic Glassmorphic HUD &amp; Anamorphic Displays</li>
+                </ul>
+              </div>
+
+              <!-- SPECIAL ACKNOWLEDGEMENTS -->
+              <div class="credit-block">
+                <div class="credit-section-tag">SPECIAL ACKNOWLEDGEMENTS</div>
+                <ul class="credit-items-list">
+                  <li><strong>NASA</strong> and its publicly available mission archives, scientific records, and educational resources.</li>
+                  <li>The scientists, engineers, flight controllers, and mission teams behind Apollo, Viking, Mars Pathfinder, MER, NEAR Shoemaker, Dawn, and Pioneer.</li>
+                  <li>The global open-source developers and communities behind Babylon.js and modern web standards.</li>
+                </ul>
+              </div>
+
+              <!-- DEVELOPMENT TOOLS & AI ASSISTANCE -->
+              <div class="credit-block">
+                <div class="credit-section-tag">DEVELOPMENT TOOLS &amp; ASSISTANCE</div>
+                <p class="credit-tool-desc">The following tools supported project development, brainstorming, and technical assistance:</p>
+                <ul class="credit-items-list">
+                  <li><strong>Google Antigravity</strong> &mdash; AI-powered development environment used for project implementation</li>
+                  <li><strong>GitHub Copilot</strong> &mdash; AI pair programming and technical implementation assistance</li>
+                  <li><strong>ChatGPT</strong> &mdash; Brainstorming, educational framing, and narrative research support</li>
+                </ul>
+              </div>
+
+              <!-- 3D MODELS AND ASSETS -->
+              <div class="credit-block">
+                <div class="credit-section-tag">3D MODELS &amp; ASSETS</div>
+                <ul class="credit-items-list">
+                  <li><strong>LUNA — Robotic Companion</strong><br/>Source: Sketchfab &bull; Creator: assetfactory &bull; Free Standard License<br/><span class="credit-url">https://sketchfab.com/3d-models/friendly-sci-fi-robot-with-animations-b83ac12ac3f14119a0988532d3613dac</span></li>
+                  <li><strong>Discovery Space Shuttle</strong><br/>Source: Sketchfab &bull; Creator: rsatenza &bull; Creative Commons Attribution (CC BY)<br/><span class="credit-url">https://sketchfab.com/3d-models/discovery-space-shuttle-23c579b845e841c9b6c6d59bd5725bb6</span></li>
+                  <li><strong>Research Cabin / Habitat &amp; Astronaut Model</strong><br/>Source: Sketchfab &bull; Creator: assetfactory &bull; Free Standard License<br/><span class="credit-url">https://sketchfab.com/3d-models/space-sci-fi-pack-a6fb873c2292443388689606f88cba9b</span></li>
+                </ul>
+              </div>
+
+              <!-- PLANETARY TERRAIN TEXTURES -->
+              <div class="credit-block">
+                <div class="credit-section-tag">PLANETARY TERRAIN TEXTURES</div>
+                <ul class="credit-items-list">
+                  <li><strong>Lunar Surface Regolith &amp; Basalt</strong> &mdash; Poly Haven (Creative Commons CC0)<br/><span class="credit-url">https://polyhaven.com/a/moon_01</span></li>
+                  <li><strong>Martian Red Dunes &amp; Chryse Sand</strong> &mdash; Poly Haven (Creative Commons CC0)<br/><span class="credit-url">https://polyhaven.com/a/red_sand</span></li>
+                </ul>
+              </div>
+
+              <!-- SOUNDTRACKS -->
+              <div class="credit-block">
+                <div class="credit-section-tag">ORIGINAL SOUNDTRACKS</div>
+                <ul class="credit-items-list">
+                  <li><strong>&ldquo;Nebula&rdquo;</strong> &mdash; Opening Cinematic &amp; Approach Sequence</li>
+                  <li><strong>&ldquo;Silent Universe&rdquo;</strong> &mdash; Trans-Earth Injection &amp; Final Credits Sequence</li>
+                </ul>
+              </div>
+
+              <!-- CARL SAGAN QUOTE -->
+              <div class="credit-block quote-block">
+                <blockquote class="credits-quote">
+                  <p>&ldquo;Somewhere, something incredible is waiting to be known.&rdquo;</p>
+                  <cite>&mdash; Carl Sagan, Astronomer &amp; Planetary Scientist</cite>
+                </blockquote>
+              </div>
+
+              <!-- FINAL CINEMATIC MESSAGE -->
+              <div class="credit-block conclusion-block">
+                <div class="credits-inspirational-message">
+                  &ldquo;They may have stopped exploring. Their discoveries never stopped inspiring.&rdquo;
+                </div>
+                <div class="credits-mission-complete">
+                  <div class="complete-badge">MISSION COMPLETE</div>
+                  <h2>THANK YOU FOR BEING A SPACE ARCHAEOLOGIST</h2>
+                  <div class="brand-sub">GHOSTS OF SPACE</div>
+                </div>
+
+                <!-- LUNA FINAL LINE -->
+                <div class="credits-luna-farewell glass-card">
+                  <div class="luna-mini-avatar"></div>
+                  <div class="luna-farewell-text">
+                    <span class="luna-name-tag">LUNA // ROBOTIC COMPANION</span>
+                    <p>&ldquo;Well, Space Archaeologist... looks like we've left our mark on the universe.&rdquo;</p>
+                  </div>
+                </div>
+
+                <!-- NASA DISCLAIMER -->
+                <p class="credits-disclaimer">
+                  Ghosts of Space is an independent student project developed for the NASA Space Apps Challenge 2026. It is not an official NASA product and is not endorsed by NASA.
+                </p>
+
+                <!-- FINAL INTERACTIVE BUTTONS -->
+                <div class="credits-final-actions">
+                  <button id="btn-credits-menu" class="btn-primary glow-ready" type="button">
+                    ⏏ RETURN TO MAIN MENU
+                  </button>
+                  <button id="btn-credits-explore-again" class="btn-secondary" type="button">
+                    ↺ EXPLORE AGAIN
+                  </button>
+                  <button id="btn-credits-archive" class="btn-secondary" type="button">
+                    📂 VIEW MISSION ARCHIVE
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
     `;
 
     document.getElementById('ui-container')?.appendChild(this.container);
+
+    this.creditsViewport = this.container.querySelector('#credits-scroll-viewport');
+    this.btnScrollPause = this.container.querySelector('#btn-credits-pause');
+    this.btnScrollSpeed = this.container.querySelector('#btn-credits-speed');
+
     this.bindEvents();
   }
 
@@ -211,7 +335,6 @@ export class CinematicClosingUI {
       this.initAudio();
       if (!this.audioCtx) return;
 
-      // Soothing major chord progression: Cmaj9 -> Fmaj7 -> Gsus4 -> C
       const chords = [
         [261.63, 329.63, 392.0, 493.88, 587.33], // C, E, G, B, D
         [174.61, 261.63, 329.63, 349.23, 440.0],  // F, C, E, F, A
@@ -270,8 +393,6 @@ export class CinematicClosingUI {
   private bindEvents(): void {
     const btnNext1 = this.container.querySelector('#btn-next-phase-1');
     const btnNext2 = this.container.querySelector('#btn-next-phase-2');
-    const btnRestart = this.container.querySelector('#btn-closing-restart');
-    const btnFreeRoam = this.container.querySelector('#btn-closing-freeroam');
 
     btnNext1?.addEventListener('click', () => {
       this.showPhase(2);
@@ -281,23 +402,114 @@ export class CinematicClosingUI {
       this.showPhase(3);
     });
 
-    btnRestart?.addEventListener('click', () => {
+    // Phase 3 scroll control buttons
+    this.btnScrollPause?.addEventListener('click', () => {
+      this.toggleScrollPause();
+    });
+
+    this.btnScrollSpeed?.addEventListener('click', () => {
+      this.toggleScrollSpeed();
+    });
+
+    this.container.querySelector('#btn-credits-skip')?.addEventListener('click', () => {
+      if (this.creditsViewport) {
+        this.creditsViewport.scrollTop = this.creditsViewport.scrollHeight;
+      }
+    });
+
+    // Phase 3 Final Interactive Buttons
+    const btnMenu = this.container.querySelector('#btn-credits-menu');
+    const btnExploreAgain = this.container.querySelector('#btn-credits-explore-again');
+    const btnArchive = this.container.querySelector('#btn-credits-archive');
+
+    btnMenu?.addEventListener('click', () => {
+      this.stopAutoScroll();
+      this.stopAudio();
+      this.hide();
+      if (this.onReturnToMainMenuCallback) {
+        this.onReturnToMainMenuCallback();
+      }
+    });
+
+    btnExploreAgain?.addEventListener('click', () => {
+      this.stopAutoScroll();
       this.stopAudio();
       SaveManager.clearSave();
       if (this.onRestartCallback) {
         this.onRestartCallback();
+      } else if (this.onFreeRoamCallback) {
+        this.onFreeRoamCallback();
       } else {
         window.location.reload();
       }
     });
 
-    btnFreeRoam?.addEventListener('click', () => {
-      this.toggleFreeRoam();
+    btnArchive?.addEventListener('click', () => {
+      // Switches back to Phase 2 (Solar Heritage Archive Roster)
+      this.showPhase(2);
     });
+  }
+
+  private toggleScrollPause(): void {
+    this.isScrollPaused = !this.isScrollPaused;
+    if (this.btnScrollPause) {
+      this.btnScrollPause.textContent = this.isScrollPaused ? '▶ RESUME SCROLL' : '⏸ PAUSE SCROLL';
+    }
+  }
+
+  private toggleScrollSpeed(): void {
+    if (this.scrollSpeedMultiplier === 1.0) {
+      this.scrollSpeedMultiplier = 2.4;
+      if (this.btnScrollSpeed) this.btnScrollSpeed.textContent = '⚡ 1X NORMAL';
+    } else {
+      this.scrollSpeedMultiplier = 1.0;
+      if (this.btnScrollSpeed) this.btnScrollSpeed.textContent = '⚡ 2X SPEED';
+    }
+  }
+
+  private startAutoScroll(): void {
+    this.stopAutoScroll();
+    if (!this.creditsViewport) return;
+
+    this.creditsViewport.scrollTop = 0;
+    this.isScrollPaused = false;
+    this.scrollSpeedMultiplier = 1.0;
+    this.lastScrollTimestamp = performance.now();
+
+    const baseSpeed = 38; // pixels per second
+
+    const step = (now: number) => {
+      if (!this.creditsViewport) return;
+
+      const dt = (now - this.lastScrollTimestamp) / 1000;
+      this.lastScrollTimestamp = now;
+
+      if (!this.isScrollPaused && dt > 0 && dt < 0.2) {
+        const maxScroll = this.creditsViewport.scrollHeight - this.creditsViewport.clientHeight;
+        if (this.creditsViewport.scrollTop < maxScroll) {
+          this.creditsViewport.scrollTop += baseSpeed * this.scrollSpeedMultiplier * dt;
+        }
+      }
+
+      this.scrollAnimId = requestAnimationFrame(step);
+    };
+
+    this.scrollAnimId = requestAnimationFrame(step);
+  }
+
+  private stopAutoScroll(): void {
+    if (this.scrollAnimId !== null) {
+      cancelAnimationFrame(this.scrollAnimId);
+      this.scrollAnimId = null;
+    }
   }
 
   public setOnRestart(cb: () => void): void {
     this.onRestartCallback = cb;
+  }
+
+  public setOnReturnToMainMenu(cb: () => void): void {
+    this.onReturnToMainMenuCallback = cb;
   }
 
   public setOnFreeRoam(cb: () => void): void {
@@ -314,9 +526,18 @@ export class CinematicClosingUI {
     phase2?.classList.add('hidden');
     phase3?.classList.add('hidden');
 
-    if (phaseNum === 1) phase1?.classList.remove('hidden');
-    if (phaseNum === 2) phase2?.classList.remove('hidden');
-    if (phaseNum === 3) phase3?.classList.remove('hidden');
+    if (phaseNum === 1) {
+      this.stopAutoScroll();
+      phase1?.classList.remove('hidden');
+    }
+    if (phaseNum === 2) {
+      this.stopAutoScroll();
+      phase2?.classList.remove('hidden');
+    }
+    if (phaseNum === 3) {
+      phase3?.classList.remove('hidden');
+      this.startAutoScroll();
+    }
   }
 
   public openClosingCinematic(): void {
@@ -335,22 +556,8 @@ export class CinematicClosingUI {
     this.container.classList.remove('hidden');
     this.container.style.opacity = '1';
 
-    // Start ambient cinematic music
+    // Start ambient cinematic music if synthetic theme enabled
     this.startCinematicTheme();
-  }
-
-  private toggleFreeRoam(): void {
-    const phase3 = this.container.querySelector('#closing-phase-3') as HTMLElement;
-    if (phase3) {
-      if (phase3.style.display === 'none') {
-        phase3.style.display = '';
-      } else {
-        phase3.style.display = 'none';
-      }
-    }
-    if (this.onFreeRoamCallback) {
-      this.onFreeRoamCallback();
-    }
   }
 
   public getCurrentPhase(): number {
@@ -358,10 +565,17 @@ export class CinematicClosingUI {
   }
 
   public hide(): void {
+    this.stopAutoScroll();
     this.stopAudio();
     this.container.style.opacity = '0';
     setTimeout(() => {
       this.container.classList.add('hidden');
     }, 400);
+  }
+
+  public dispose(): void {
+    this.stopAutoScroll();
+    this.stopAudio();
+    this.container.remove();
   }
 }

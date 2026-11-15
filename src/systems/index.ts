@@ -1,2 +1,2 @@
 // Systems module barrel export
-export {};
+export * from './SettingsManager.ts';

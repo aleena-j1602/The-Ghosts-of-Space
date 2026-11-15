@@ -46,6 +46,19 @@ export class HUD {
   private minimapCanvas: HTMLCanvasElement | null = null;
   private minimapCtx: CanvasRenderingContext2D | null = null;
 
+  // Numerical indicator elements
+  private suitPctEl!: HTMLElement;
+  private energyPctEl!: HTMLElement;
+  private lunaPctEl!: HTMLElement;
+  private capacityPctEl!: HTMLElement;
+
+  // Minimap tracking state
+  private artifacts: ArtifactDefinition[] = [];
+  private getArtifactPosition?: (id: string) => Vector3 | undefined;
+  private detectedArtifact: ArtifactDefinition | null = null;
+  private lastPlayerPos: Vector3 = new Vector3(0, 0, 0);
+  private lastPlayerForward: Vector3 = new Vector3(0, 0, 1);
+
   constructor() {
     this.gameState = GameState.getInstance();
 
@@ -159,7 +172,7 @@ export class HUD {
             <span class="minimap-poi-pill">SURFACE GRID</span>
           </div>
           <div class="minimap-canvas-wrapper" id="minimap-wrapper">
-            <canvas id="minimapCanvas" width="180" height="180"></canvas>
+            <canvas id="minimapCanvas" width="150" height="150"></canvas>
             <span class="compass-marker marker-n">N</span>
             <span class="compass-marker marker-s">S</span>
             <span class="compass-marker marker-e">E</span>
@@ -201,6 +214,12 @@ export class HUD {
     this.lunaFillEl = this.container.querySelector('#luna-fill') as HTMLElement;
     this.capacityFillEl = this.container.querySelector('#capacity-fill') as HTMLElement;
     this.coordsEl = this.container.querySelector('#hud-coords') as HTMLElement;
+
+    // Numerical indicator element references
+    this.suitPctEl = this.container.querySelector('#suit-pct') as HTMLElement;
+    this.energyPctEl = this.container.querySelector('#energy-pct') as HTMLElement;
+    this.lunaPctEl = this.container.querySelector('#luna-pct') as HTMLElement;
+    this.capacityPctEl = this.container.querySelector('#capacity-pct') as HTMLElement;
 
     this.radarWidget = this.container.querySelector('#proximity-radar') as HTMLElement;
     this.radarDistanceEl = this.container.querySelector('#radar-distance') as HTMLElement;
@@ -343,7 +362,18 @@ export class HUD {
     return Boolean(this.returnToShuttleCard && !this.returnToShuttleCard.classList.contains('hidden'));
   }
 
+  public setArtifacts(
+    artifacts: ArtifactDefinition[],
+    getPosition?: (id: string) => Vector3 | undefined
+  ): void {
+    this.artifacts = artifacts;
+    if (getPosition) {
+      this.getArtifactPosition = getPosition;
+    }
+  }
+
   public updateRadar(detected: ArtifactDefinition | null, distance: number, signalStrength: number, canInteract: boolean): void {
+    this.detectedArtifact = detected;
     if (detected) {
       this.radarWidget.classList.remove('hidden');
       this.radarDistanceEl.textContent = `${distance.toFixed(1)}m`;
@@ -361,34 +391,93 @@ export class HUD {
     }
   }
 
-  public update(playerPos?: Vector3): void {
+  public updateMinimap(
+    playerPos: Vector3,
+    playerForward?: Vector3,
+    detectedArtifactId?: string | null
+  ): void {
+    this.lastPlayerPos.copyFrom(playerPos);
+    if (playerForward) {
+      this.lastPlayerForward.copyFrom(playerForward);
+    }
+    if (detectedArtifactId !== undefined) {
+      this.detectedArtifact =
+        this.artifacts.find((a) => a.id === detectedArtifactId) ?? null;
+    }
+    this.renderMinimap();
+  }
+
+  public update(playerPos?: Vector3, playerForward?: Vector3): void {
     if (this.missionDayEl) {
       this.missionDayEl.textContent = `${this.gameState.missionDay} / ${this.gameState.maxMissionDays}`;
     }
     if (this.progressCountEl) {
       this.progressCountEl.textContent = `${this.gameState.artifactsCollected} / ${this.gameState.recoveryTarget}`;
     }
+
+    // Live numeric resource percentages
+    const suitVal = Math.round(this.gameState.resources.suitIntegrity);
+    const energyVal = Math.round((this.gameState.resources.energy / this.gameState.resources.maxEnergy) * 100);
+    const lunaVal = Math.round(this.gameState.resources.lunaBattery);
+    const capacityVal = Math.max(0, Math.round(this.gameState.resources.recoveryCapacity));
+
+    if (this.suitPctEl) {
+      this.suitPctEl.textContent = `${suitVal}%`;
+    }
+    if (this.energyPctEl) {
+      this.energyPctEl.textContent = `${energyVal}%`;
+    }
+    if (this.lunaPctEl) {
+      this.lunaPctEl.textContent = `${lunaVal}%`;
+    }
+    if (this.capacityPctEl) {
+      this.capacityPctEl.textContent = `${capacityVal} / 3`;
+    }
+
+    // Status bar visual fills
     if (this.suitFillEl) {
-      this.suitFillEl.style.width = `${this.gameState.resources.suitIntegrity}%`;
+      this.suitFillEl.style.width = `${suitVal}%`;
     }
     if (this.energyFillEl) {
-      this.energyFillEl.style.width = `${(this.gameState.resources.energy / this.gameState.resources.maxEnergy) * 100}%`;
+      this.energyFillEl.style.width = `${energyVal}%`;
     }
     if (this.lunaFillEl) {
-      this.lunaFillEl.style.width = `${this.gameState.resources.lunaBattery}%`;
+      this.lunaFillEl.style.width = `${lunaVal}%`;
     }
     if (this.capacityFillEl) {
-      this.capacityFillEl.style.width = `${(this.gameState.resources.recoveryCapacity / 3) * 100}%`;
+      this.capacityFillEl.style.width = `${(capacityVal / 3) * 100}%`;
     }
+
     if (this.coordsEl && playerPos) {
       this.coordsEl.textContent = `X: ${playerPos.x.toFixed(1)} • Z: ${playerPos.z.toFixed(1)}`;
     }
     if (playerPos) {
-      this.renderMinimap(playerPos);
+      this.lastPlayerPos.copyFrom(playerPos);
+      if (playerForward) {
+        this.lastPlayerForward.copyFrom(playerForward);
+      }
+      this.renderMinimap();
     }
   }
 
-  private renderMinimap(playerPos: Vector3): void {
+  private getArtifactCoords(art: ArtifactDefinition): { x: number; z: number } {
+    if (this.getArtifactPosition) {
+      const pos = this.getArtifactPosition(art.id);
+      if (pos) {
+        return { x: pos.x, z: pos.z };
+      }
+    }
+    // Fallback known coordinates for Moon & Mars
+    if (art.id === 'a11-lm5-descent') return { x: 32, z: 22 };
+    if (art.id === 'a12-lm6-ascent') return { x: -28, z: 32 };
+    if (art.id === 'a15-lm10-ascent') return { x: 14, z: -38 };
+    if (art.id === 'viking-1-lander') return { x: -35, z: 25 };
+    if (art.id === 'sojourner') return { x: 42, z: -18 };
+    if (art.id === 'opportunity') return { x: -15, z: -45 };
+    return { x: 0, z: 0 };
+  }
+
+  private renderMinimap(): void {
     if (!this.minimapCtx || !this.minimapCanvas) return;
     const ctx = this.minimapCtx;
     const w = this.minimapCanvas.width;
@@ -399,48 +488,120 @@ export class HUD {
 
     ctx.clearRect(0, 0, w, h);
 
-    // Radar circular background
+    // 1. Radar circular background
     ctx.save();
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(6, 12, 24, 0.92)';
+    ctx.fillStyle = 'rgba(6, 12, 24, 0.94)';
     ctx.fill();
     ctx.strokeStyle = 'rgba(70, 217, 232, 0.4)';
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    // Concentric range rings
-    [0.35, 0.7, 1.0].forEach((scale) => {
+    // Clip to circular radar boundary
+    ctx.clip();
+
+    // 2. Concentric range rings (approx 20m, 40m, 60m radius)
+    [0.33, 0.66, 1.0].forEach((scale) => {
       ctx.beginPath();
       ctx.arc(cx, cy, r * scale, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(70, 217, 232, 0.18)';
+      ctx.strokeStyle = 'rgba(70, 217, 232, 0.16)';
       ctx.lineWidth = 1;
       ctx.stroke();
     });
 
-    // Crosshairs
+    // 3. Coordinate crosshairs
     ctx.beginPath();
     ctx.moveTo(cx, cy - r);
     ctx.lineTo(cx, cy + r);
     ctx.moveTo(cx - r, cy);
     ctx.lineTo(cx + r, cy);
     ctx.strokeStyle = 'rgba(70, 217, 232, 0.15)';
+    ctx.lineWidth = 1;
     ctx.stroke();
 
-    // Center player icon (cyan glowing dot)
+    // Map scale: map ~60m world radius to (r - 12) pixels
+    const mapScale = (r - 12) / 60;
+
+    // 4. Habitat / Shuttle Landing Base at (0,0)
+    ctx.fillStyle = '#22c55e';
+    ctx.fillRect(cx - 3, cy - 3, 6, 6);
+    ctx.strokeStyle = 'rgba(34, 197, 94, 0.7)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(cx - 3, cy - 3, 6, 6);
+
+    // 5. Artifact points of interest
+    this.artifacts.forEach((art) => {
+      const coords = this.getArtifactCoords(art);
+      const ax = cx + coords.x * mapScale;
+      const ay = cy - coords.z * mapScale;
+
+      if (art.isCollected) {
+        // Collected: Green marker
+        ctx.fillStyle = '#22c55e';
+        ctx.beginPath();
+        ctx.arc(ax, ay, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (this.detectedArtifact && this.detectedArtifact.id === art.id) {
+        // Detected / Pinging: Cyan pulsating ring
+        const pulse = 4 + Math.sin(performance.now() * 0.008) * 2;
+        ctx.strokeStyle = '#46d9e8';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(ax, ay, pulse, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.fillStyle = '#46d9e8';
+        ctx.beginPath();
+        ctx.arc(ax, ay, 3, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        // Known Target: Amber marker
+        ctx.fillStyle = '#f5b942';
+        ctx.beginPath();
+        ctx.arc(ax, ay, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    });
+
+    // 6. Player position & orientation
+    const px = cx + this.lastPlayerPos.x * mapScale;
+    const py = cy - this.lastPlayerPos.z * mapScale;
+
+    // Orientation cone & direction arrow
+    const fwd = this.lastPlayerForward;
+    const angle = Math.atan2(-fwd.z, fwd.x);
+
+    // Semi-transparent field-of-view cone
+    ctx.fillStyle = 'rgba(70, 217, 232, 0.28)';
     ctx.beginPath();
-    ctx.arc(cx, cy, 3.5, 0, Math.PI * 2);
+    ctx.moveTo(px, py);
+    ctx.arc(px, py, 14, angle - 0.45, angle + 0.45);
+    ctx.closePath();
+    ctx.fill();
+
+    // Directional heading arrow
+    ctx.strokeStyle = '#46d9e8';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(px, py);
+    ctx.lineTo(px + Math.cos(angle) * 9, py + Math.sin(angle) * 9);
+    ctx.stroke();
+
+    // Player blip (cyan glowing dot)
+    ctx.beginPath();
+    ctx.arc(px, py, 3.5, 0, Math.PI * 2);
     ctx.fillStyle = '#46d9e8';
     ctx.shadowColor = '#46d9e8';
     ctx.shadowBlur = 8;
     ctx.fill();
 
-    // Coordinates tag at bottom of radar
+    // 7. Coordinates readout tag at bottom of radar
     ctx.shadowBlur = 0;
-    ctx.fillStyle = 'rgba(70, 217, 232, 0.75)';
+    ctx.fillStyle = 'rgba(70, 217, 232, 0.85)';
     ctx.font = '8px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(`${playerPos.x.toFixed(0)}, ${playerPos.z.toFixed(0)}`, cx, cy + r - 6);
+    ctx.fillText(`${this.lastPlayerPos.x.toFixed(1)}, ${this.lastPlayerPos.z.toFixed(1)}`, cx, cy + r - 5);
 
     ctx.restore();
   }

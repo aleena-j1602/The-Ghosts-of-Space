@@ -41,20 +41,20 @@ export class PlayerController {
     let moveForward = 0;
     let moveRight = 0;
 
-    if (this.inputManager.isKeyDown('KeyW') || this.inputManager.isKeyDown('ArrowUp')) {
+    if (this.inputManager.isActionActive('forward') || this.inputManager.isKeyDown('KeyW') || this.inputManager.isKeyDown('ArrowUp')) {
       moveForward += 1;
     }
-    if (this.inputManager.isKeyDown('KeyS') || this.inputManager.isKeyDown('ArrowDown')) {
+    if (this.inputManager.isActionActive('backward') || this.inputManager.isKeyDown('KeyS') || this.inputManager.isKeyDown('ArrowDown')) {
       moveForward -= 1;
     }
-    if (this.inputManager.isKeyDown('KeyD') || this.inputManager.isKeyDown('ArrowRight')) {
+    if (this.inputManager.isActionActive('right') || this.inputManager.isKeyDown('KeyD') || this.inputManager.isKeyDown('ArrowRight')) {
       moveRight += 1;
     }
-    if (this.inputManager.isKeyDown('KeyA') || this.inputManager.isKeyDown('ArrowLeft')) {
+    if (this.inputManager.isActionActive('left') || this.inputManager.isKeyDown('KeyA') || this.inputManager.isKeyDown('ArrowLeft')) {
       moveRight -= 1;
     }
 
-    const isRunning = this.inputManager.isKeyDown('ShiftLeft') || this.inputManager.isKeyDown('ShiftRight');
+    const isRunning = this.inputManager.isActionActive('sprint') || this.inputManager.isKeyDown('ShiftLeft') || this.inputManager.isKeyDown('ShiftRight');
     const isMoving = moveForward !== 0 || moveRight !== 0;
 
     if (isMoving) {
@@ -103,6 +103,6 @@ export class PlayerController {
   }
 
   public isSprinting(): boolean {
-    return this.inputManager.isKeyDown('ShiftLeft') || this.inputManager.isKeyDown('ShiftRight');
+    return this.inputManager.isActionActive('sprint') || this.inputManager.isKeyDown('ShiftLeft') || this.inputManager.isKeyDown('ShiftRight');
   }
 }

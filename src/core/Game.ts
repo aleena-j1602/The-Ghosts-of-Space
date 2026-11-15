@@ -17,6 +17,8 @@ import { SaveManager } from '../systems/SaveManager.ts';
 import { RechargeUI } from '../ui/RechargeUI.ts';
 import { ReportDesignerUI } from '../ui/ReportDesignerUI.ts';
 import { CinematicClosingUI } from '../ui/CinematicClosingUI.ts';
+import { PauseMenuUI } from '../ui/PauseMenuUI.ts';
+import { SettingsManager } from '../systems/SettingsManager.ts';
 import { MoonEnvironment } from '../environments/MoonEnvironment.ts';
 import { MarsEnvironment } from '../environments/MarsEnvironment.ts';
 
@@ -35,6 +37,8 @@ export class Game {
   private investigationUI: InvestigationUI;
   private reportDesignerUI: ReportDesignerUI;
   private cinematicClosingUI: CinematicClosingUI;
+  private pauseMenuUI: PauseMenuUI;
+  private isPaused: boolean = false;
 
   // Telemetry indicators
   private fpsDisplay: HTMLElement | null = null;
@@ -90,6 +94,7 @@ export class Game {
     this.investigationUI = new InvestigationUI();
     this.reportDesignerUI = new ReportDesignerUI();
     this.cinematicClosingUI = new CinematicClosingUI();
+    this.pauseMenuUI = new PauseMenuUI();
 
     // Phase 6/7 system instantiation
     this.resourceManager = new ResourceManager();
@@ -97,6 +102,7 @@ export class Game {
     this.rechargeUI = new RechargeUI();
 
     this.setupUIBindings();
+    this.setupPauseMenuEvents();
     this.setupWindowEvents();
     this.setupCinematicSequence();
     this.setupInvestigationEvents();
@@ -119,13 +125,30 @@ export class Game {
     });
 
     this.hud.setOnToggleSensorMute(() => {
-      const moonEnv = this.sceneManager.getMoonEnvironment();
-      const marsEnv = this.sceneManager.getMarsEnvironment();
-      const env = moonEnv || marsEnv;
+      const env = this.getCurrentSurfaceEnv();
       if (env) {
         const isMuted = env.lunaDetection.toggleMute();
         this.hud.setSensorMuted(isMuted);
       }
+    });
+  }
+
+  private setupPauseMenuEvents(): void {
+    this.pauseMenuUI.setOnResume(() => {
+      this.resumeGame();
+    });
+
+    this.pauseMenuUI.setOnRestartLevel(() => {
+      this.restartCurrentLevel();
+    });
+
+    this.pauseMenuUI.setOnReturnToMainMenu(() => {
+      this.returnToMainMenu();
+    });
+
+    // Real-time audio settings listener
+    SettingsManager.getInstance().onAudioChange(() => {
+      this.applyAudioSettings();
     });
   }
 
@@ -134,32 +157,71 @@ export class Game {
       this.engine.resize();
     });
 
-    // Global Key Listener for Interaction [E]
+    // Global Key Listener for Pause, Interaction & Rebindable Actions
     window.addEventListener('keydown', (e: KeyboardEvent) => {
-      if (e.code === 'KeyE') {
+      // 1. If pause menu is active, it consumes its own inputs
+      if (this.pauseMenuUI.isOpen()) {
+        return;
+      }
+
+      // 2. Sub-modals intercept ESC to close before pause menu triggers
+      if (e.code === 'Escape') {
+        if (this.investigationUI.isOpen()) {
+          this.investigationUI.hide();
+          return;
+        }
+        if (this.reportDesignerUI.isOpen()) {
+          this.reportDesignerUI.hide();
+          return;
+        }
+        if (this.rechargeUI.isOpen()) {
+          this.rechargeUI.hide();
+          return;
+        }
+        if (this.mapUI.isOpen()) {
+          this.mapUI.hide();
+          return;
+        }
+      }
+
+      // 3. Pause Key [ESC]
+      if (e.code === 'Escape' || SettingsManager.getInstance().isKeyForAction(e.code, 'pause')) {
+        if (this.canPause()) {
+          this.togglePause();
+          return;
+        }
+      }
+
+      // If game is paused, ignore all gameplay action keys
+      if (this.isPaused) return;
+
+      // Ignore repeated keydown events from holding a key (prevents fluttering or multi-toggles)
+      if (e.repeat) return;
+
+      // 4. Rebindable gameplay actions
+      const sm = SettingsManager.getInstance();
+
+      if (sm.isKeyForAction(e.code, 'interact')) {
         this.handleInteractKey();
       }
-      // R key: Recharge at habitat
-      if (e.code === 'KeyR') {
+      if (sm.isKeyForAction(e.code, 'recharge')) {
         this.handleRechargeKey();
       }
-      // T key: Transmit report to Earth
-      if (e.code === 'KeyT') {
+      if (sm.isKeyForAction(e.code, 'report')) {
         this.handleReportKey();
       }
-      // U key: Toggle Luna sensor audio
-      if (e.code === 'KeyU') {
-        const moonEnv = this.sceneManager.getMoonEnvironment();
-        const marsEnv = this.sceneManager.getMarsEnvironment();
-        const env = moonEnv || marsEnv;
+      if (sm.isKeyForAction(e.code, 'sensor')) {
+        const env = this.getCurrentSurfaceEnv();
         if (env) {
           const isMuted = env.lunaDetection.toggleMute();
           this.hud.setSensorMuted(isMuted);
         }
       }
-      // I key: Archive (future)
-      if (e.code === 'KeyI') {
-        // placeholder for archive UI
+      if (sm.isKeyForAction(e.code, 'map')) {
+        if (this.investigationUI.isOpen() || this.reportDesignerUI.isOpen() || this.rechargeUI.isOpen()) {
+          return;
+        }
+        this.mapUI.toggle();
       }
     });
   }
@@ -198,9 +260,11 @@ export class Game {
     });
 
     this.cinematicClosingUI.setOnRestart(() => {
-      this.stopEndingSoundtrack();
-      this.stopNebulaIntro(false);
-      window.location.reload();
+      this.restartEntireExpedition();
+    });
+
+    this.cinematicClosingUI.setOnReturnToMainMenu(() => {
+      this.returnToMainMenu();
     });
 
     this.cinematicClosingUI.setOnFreeRoam(() => {
@@ -280,6 +344,13 @@ export class Game {
           }
 
           // Resume and refresh HUD
+          const curEnv = this.getCurrentSurfaceEnv();
+          if (curEnv) {
+            this.hud.setArtifacts(
+              curEnv.artifactManager.artifacts,
+              (id) => curEnv.artifactManager.getArtifactPosition(id)
+            );
+          }
           this.hud.show();
           this.hud.update();
         },
@@ -355,6 +426,10 @@ export class Game {
 
     btnContinue?.addEventListener('click', () => {
       this.postArchivePrompt?.classList.add('hidden');
+      const env = this.getCurrentSurfaceEnv();
+      if (env) {
+        env.lunaDetection.resumeRadarForNewSearch();
+      }
       if (this.gameState.artifactsCollected >= this.gameState.recoveryTarget) {
         const isMars = this.gameState.currentLevel === GameLevel.MARS;
         this.hud.showReturnToShuttleCard(
@@ -368,6 +443,9 @@ export class Game {
 
   private playAirlockAudio(isEntering: boolean): void {
     try {
+      const sfxVol = SettingsManager.getInstance().getEffectiveSfxVolume();
+      if (sfxVol <= 0.001) return;
+
       if (!this.airlockAudioCtx) {
         const AudioCtxClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
         if (AudioCtxClass) this.airlockAudioCtx = new AudioCtxClass();
@@ -396,8 +474,8 @@ export class Game {
       filter.frequency.exponentialRampToValueAtTime(isEntering ? 1200 : 300, now + 0.5);
 
       const noiseGain = this.airlockAudioCtx.createGain();
-      noiseGain.gain.setValueAtTime(0.04, now);
-      noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+      noiseGain.gain.setValueAtTime(0.04 * sfxVol, now);
+      noiseGain.gain.exponentialRampToValueAtTime(0.001 * sfxVol, now + 0.55);
 
       whiteNoise.connect(filter);
       filter.connect(noiseGain);
@@ -410,8 +488,8 @@ export class Game {
       osc.type = 'triangle';
       osc.frequency.setValueAtTime(isEntering ? 140 : 220, now + 0.35);
       osc.frequency.exponentialRampToValueAtTime(60, now + 0.5);
-      oscGain.gain.setValueAtTime(0.08, now + 0.35);
-      oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+      oscGain.gain.setValueAtTime(0.08 * sfxVol, now + 0.35);
+      oscGain.gain.exponentialRampToValueAtTime(0.001 * sfxVol, now + 0.55);
 
       osc.connect(oscGain);
       oscGain.connect(this.airlockAudioCtx.destination);
@@ -523,6 +601,9 @@ export class Game {
     const detectionState = env.currentDetectionState;
     if (detectionState.canInteract && detectionState.detectedArtifact) {
       const artifact = detectionState.detectedArtifact;
+      // Immediately stop and mute sensor audio during probe investigation
+      env.lunaDetection.stopRadarForInvestigation();
+      this.resourceManager.consumeScanEnergy();
       // Start scanning sequence!
       this.investigationUI.startScanSequence(artifact);
     }
@@ -658,7 +739,13 @@ export class Game {
 
     this.gameState.artifactsCollected += 1;
     this.gameState.investigationPoints += artifact.rewards.basePoints;
+    this.gameState.resources.recoveryCapacity = Math.max(0, 3 - this.gameState.artifactsCollected);
     SaveManager.saveGame();
+
+    // Re-enable sensor search for the next probe once current artifact is archived
+    if (env) {
+      env.lunaDetection.resumeRadarForNewSearch();
+    }
 
     // 2. Update HUD & Map
     this.hud.update();
@@ -667,6 +754,10 @@ export class Game {
       this.mapUI.setArtifacts(deepSpaceArtifacts);
     } else if (env) {
       this.mapUI.setArtifacts(
+        env.artifactManager.artifacts,
+        (id) => env.artifactManager.getArtifactPosition(id)
+      );
+      this.hud.setArtifacts(
         env.artifactManager.artifacts,
         (id) => env.artifactManager.getArtifactPosition(id)
       );
@@ -940,6 +1031,19 @@ export class Game {
             moonEnv.artifactManager.artifacts,
             (id) => moonEnv.artifactManager.getArtifactPosition(id)
           );
+          this.hud.setArtifacts(
+            moonEnv.artifactManager.artifacts,
+            (id) => moonEnv.artifactManager.getArtifactPosition(id)
+          );
+          moonEnv.scene.onBeforeRenderObservable.add(() => {
+            if (!moonEnv.isLandingCinematic) {
+              this.hud.updateMinimap(
+                moonEnv.playerController.getPosition(),
+                moonEnv.playerController.getForward(),
+                moonEnv.currentDetectionState.detectedArtifact?.id ?? null
+              );
+            }
+          });
         }
       },
       (lunaAlertMsg: string) => {
@@ -979,6 +1083,19 @@ export class Game {
               marsEnv.artifactManager.artifacts,
               (id) => marsEnv.artifactManager.getArtifactPosition(id)
             );
+            this.hud.setArtifacts(
+              marsEnv.artifactManager.artifacts,
+              (id) => marsEnv.artifactManager.getArtifactPosition(id)
+            );
+            marsEnv.scene.onBeforeRenderObservable.add(() => {
+              if (!marsEnv.isLandingCinematic) {
+                this.hud.updateMinimap(
+                  marsEnv.playerController.getPosition(),
+                  marsEnv.playerController.getForward(),
+                  marsEnv.currentDetectionState.detectedArtifact?.id ?? null
+                );
+              }
+            });
           }
         },
         (lunaAlertMsg: string) => {
@@ -1410,7 +1527,7 @@ export class Game {
           this.checkEnergyAlert();
         }
 
-        this.hud.update(playerPos);
+        this.hud.update(playerPos, playerForward);
         this.hud.updateRadar(
           surfaceEnv.currentDetectionState.detectedArtifact,
           surfaceEnv.currentDetectionState.distance,
@@ -1532,7 +1649,7 @@ export class Game {
     this.hasNebulaIntroPlayed = true;
     this.isIntroCinematicActive = true;
     this.nebulaAudio.currentTime = 0;
-    this.nebulaAudio.volume = this.musicVolume;
+    this.nebulaAudio.volume = this.musicVolume * SettingsManager.getInstance().getEffectiveMusicVolume();
 
     const playPromise = this.nebulaAudio.play();
     if (playPromise !== undefined) {
@@ -1601,7 +1718,7 @@ export class Game {
       } else {
         this.nebulaAudio.pause();
         this.nebulaAudio.currentTime = 0;
-        this.nebulaAudio.volume = this.musicVolume;
+        this.nebulaAudio.volume = this.musicVolume * SettingsManager.getInstance().getEffectiveMusicVolume();
         this.isNebulaFading = false;
       }
     };
@@ -1629,7 +1746,7 @@ export class Game {
     this.stopNebulaIntro(false);
 
     this.endingAudio.currentTime = 0;
-    this.endingAudio.volume = this.musicVolume;
+    this.endingAudio.volume = this.musicVolume * SettingsManager.getInstance().getEffectiveMusicVolume();
     const playPromise = this.endingAudio.play();
     if (playPromise !== undefined) {
       playPromise.catch((err) => {
@@ -1647,15 +1764,273 @@ export class Game {
 
   public setMusicVolume(volume: number): void {
     this.musicVolume = Math.max(0, Math.min(1, volume));
-    if (this.nebulaAudio) {
-      this.nebulaAudio.volume = this.musicVolume;
-    }
-    if (this.endingAudio) {
-      this.endingAudio.volume = this.musicVolume;
-    }
+    this.applyAudioSettings();
   }
 
   public getMusicVolume(): number {
     return this.musicVolume;
+  }
+
+  public applyAudioSettings(): void {
+    const effectiveMusicVol = this.musicVolume * SettingsManager.getInstance().getEffectiveMusicVolume();
+    if (this.nebulaAudio && !this.isNebulaFading) {
+      this.nebulaAudio.volume = effectiveMusicVol;
+    }
+    if (this.endingAudio) {
+      this.endingAudio.volume = effectiveMusicVol;
+    }
+  }
+
+  // ==========================================
+  // PAUSE, RESUME, SETTINGS & NAVIGATION LOGIC
+  // ==========================================
+
+  public canPause(): boolean {
+    // Prevent pausing during non-interactive opening cinematic
+    if (this.isIntroCinematicActive && this.gameState.currentLevel === GameLevel.OPENING_CINEMATIC) {
+      return false;
+    }
+    // Prevent pausing during airlock transition screen
+    if (this.airlockTransitionEl && !this.airlockTransitionEl.classList.contains('hidden')) {
+      return false;
+    }
+    // Prevent pausing during closing cinematic epilogue or credits
+    if (this.cinematicClosingUI.getCurrentPhase() > 0 && !document.getElementById('cinematic-closing-overlay')?.classList.contains('hidden')) {
+      return false;
+    }
+    return true;
+  }
+
+  public togglePause(): void {
+    if (this.isPaused) {
+      this.resumeGame();
+    } else {
+      this.pauseGame();
+    }
+  }
+
+  public pauseGame(): void {
+    if (this.isPaused || !this.canPause()) return;
+    this.isPaused = true;
+
+    // 1. Disable player movement and camera controls
+    const surface = this.getCurrentSurfaceEnv();
+    if (surface) {
+      surface.playerController.setEnabled(false);
+      surface.camera?.camera.detachControl();
+      surface.lunaDetection.stopActiveOscillators();
+    }
+    const cabin = this.sceneManager.getCabinEnvironment();
+    if (cabin) {
+      cabin.camera?.detachControl();
+    }
+    const researchCabin = this.sceneManager.getResearchCabinEnvironment();
+    if (researchCabin) {
+      researchCabin.camera?.detachControl();
+    }
+
+    // 2. Clear input key states
+    this.inputManager.resetKeys();
+
+    // 3. Open Pause Menu UI
+    this.pauseMenuUI.open(this.getCurrentLevelDisplayName());
+  }
+
+  public resumeGame(): void {
+    if (!this.isPaused) return;
+    this.isPaused = false;
+
+    // 1. Close Pause Menu UI
+    this.pauseMenuUI.close();
+
+    // 2. Re-enable player movement & camera controls
+    const canvas = this.engine.getRenderingCanvas();
+    const surface = this.getCurrentSurfaceEnv();
+    if (surface) {
+      surface.playerController.setEnabled(true);
+      if (canvas && surface.camera?.camera) {
+        surface.camera.camera.attachControl(canvas, true);
+      }
+    }
+    const cabin = this.sceneManager.getCabinEnvironment();
+    if (cabin && canvas && cabin.camera) {
+      cabin.camera.attachControl(canvas, true);
+    }
+    const researchCabin = this.sceneManager.getResearchCabinEnvironment();
+    if (researchCabin && canvas && researchCabin.camera) {
+      researchCabin.camera.attachControl(canvas, true);
+    }
+  }
+
+  public getCurrentLevelDisplayName(): string {
+    switch (this.gameState.currentLevel) {
+      case GameLevel.MOON:
+        return 'SECTOR 1 // THE SILENT MOON • MARE TRANQUILLITATIS';
+      case GameLevel.MARS:
+        return 'SECTOR 2 // THE RED PLANET • CHRYSE PLANITIA & ARES VALLIS';
+      case GameLevel.DEEP_SPACE:
+        return 'SECTOR 3 // DEEP SPACE OBSERVATORY • ASTEROID BELT & BEYOND';
+      default:
+        return 'ORBITAL COMMAND // RESEARCH CABIN';
+    }
+  }
+
+  public restartCurrentLevel(): void {
+    this.resumeGame();
+
+    const level = this.gameState.currentLevel;
+    if (level === GameLevel.MOON) {
+      // Reset Level 1 Moon artifacts
+      const moonIds = ['a11-lm5-descent', 'a12-lm6-ascent', 'a15-lm10-ascent'];
+      moonIds.forEach((id) => {
+        if (ARTIFACTS_DATA[id]) ARTIFACTS_DATA[id].isCollected = false;
+      });
+      this.gameState.artifactsCollected = 0;
+      this.gameState.recoveryTarget = 3;
+      this.resourceManager.rechargeFull();
+
+      this.sceneManager.switchToMoon(
+        false,
+        () => {
+          const moonEnv = this.sceneManager.getMoonEnvironment();
+          if (moonEnv) {
+            this.mapUI.setArtifacts(
+              moonEnv.artifactManager.artifacts,
+              (id) => moonEnv.artifactManager.getArtifactPosition(id)
+            );
+            this.hud.setArtifacts(
+              moonEnv.artifactManager.artifacts,
+              (id) => moonEnv.artifactManager.getArtifactPosition(id)
+            );
+            moonEnv.scene.onBeforeRenderObservable.add(() => {
+              if (!moonEnv.isLandingCinematic && !this.isPaused) {
+                this.hud.updateMinimap(
+                  moonEnv.playerController.getPosition(),
+                  moonEnv.playerController.getForward(),
+                  moonEnv.currentDetectionState.detectedArtifact?.id ?? null
+                );
+              }
+            });
+          }
+          this.hud.setLevelInfo(
+            'SECTOR // MOON &bull; MARE TRANQUILLITATIS',
+            'LEVEL 1: THE SILENT MOON'
+          );
+          this.hud.show();
+          this.hud.update();
+        },
+        (msg: string) => this.hud.showLunaAlert(msg)
+      );
+    } else if (level === GameLevel.MARS) {
+      // Reset Level 2 Mars artifacts (preserves Level 1 Moon achievements)
+      const marsIds = ['viking-1-lander', 'sojourner', 'spirit'];
+      marsIds.forEach((id) => {
+        if (ARTIFACTS_DATA[id]) ARTIFACTS_DATA[id].isCollected = false;
+      });
+      this.gameState.artifactsCollected = 0;
+      this.gameState.recoveryTarget = 3;
+      this.resourceManager.rechargeFull();
+
+      this.sceneManager.switchToMars(
+        false,
+        () => {
+          const marsEnv = this.sceneManager.getMarsEnvironment();
+          if (marsEnv) {
+            this.mapUI.setArtifacts(
+              marsEnv.artifactManager.artifacts,
+              (id) => marsEnv.artifactManager.getArtifactPosition(id)
+            );
+            this.hud.setArtifacts(
+              marsEnv.artifactManager.artifacts,
+              (id) => marsEnv.artifactManager.getArtifactPosition(id)
+            );
+            marsEnv.scene.onBeforeRenderObservable.add(() => {
+              if (!marsEnv.isLandingCinematic && !this.isPaused) {
+                this.hud.updateMinimap(
+                  marsEnv.playerController.getPosition(),
+                  marsEnv.playerController.getForward(),
+                  marsEnv.currentDetectionState.detectedArtifact?.id ?? null
+                );
+              }
+            });
+          }
+          this.hud.setLevelInfo(
+            'SECTOR // MARS &bull; CHRYSE PLANITIA &amp; ARES VALLIS',
+            'LEVEL 2: THE RED PLANET'
+          );
+          this.hud.show();
+          this.hud.update();
+        },
+        (msg: string) => this.hud.showLunaAlert(msg)
+      );
+    } else if (level === GameLevel.DEEP_SPACE) {
+      // Reset Level 3 Deep Space probes (preserves Levels 1 & 2)
+      const deepIds = ['dawn-spacecraft', 'near-shoemaker', 'pioneer-10'];
+      deepIds.forEach((id) => {
+        if (ARTIFACTS_DATA[id]) ARTIFACTS_DATA[id].isCollected = false;
+      });
+      this.gameState.artifactsCollected = 0;
+      this.gameState.recoveryTarget = 3;
+      this.resourceManager.rechargeFull();
+
+      this.sceneManager.switchToResearchCabin(() => {
+        this.hud.setLevelInfo(
+          'SECTOR // DEEP SPACE &bull; ASTEROID BELT &amp; BEYOND',
+          'LEVEL 3: DEEP SPACE OBSERVATORY'
+        );
+        this.hud.show();
+        this.hud.update();
+
+        const deepSpaceArtifacts = Object.values(ARTIFACTS_DATA).filter((a) => a.level === 3);
+        this.mapUI.setArtifacts(deepSpaceArtifacts);
+        this.mapUI.setMapTitle(
+          'DEEP SPACE NETWORK // ASTROGATION RELAY',
+          'SOLAR SYSTEM ASTROGATION: ASTEROID BELT &amp; OUTER PLANETS'
+        );
+      });
+    }
+  }
+
+  public returnToMainMenu(): void {
+    this.resumeGame();
+    this.hud.hide();
+    this.hud.hideReturnToShuttleCard();
+    this.mapUI.hide();
+    this.investigationUI.hide();
+    this.reportDesignerUI.hide();
+    this.rechargeUI.hide();
+    this.dialogueUI.hide();
+    this.cinematicClosingUI.hide();
+    this.shelterPrompt?.classList.add('hidden');
+    this.reportPrompt?.classList.add('hidden');
+    this.postArchivePrompt?.classList.add('hidden');
+    this.missionAccomplishedModal?.classList.add('hidden');
+
+    this.stopEndingSoundtrack();
+    const surface = this.getCurrentSurfaceEnv();
+    surface?.lunaDetection?.stopRadarPing();
+
+    // Reset level state to opening cinematic
+    this.gameState.currentLevel = GameLevel.OPENING_CINEMATIC;
+
+    // Switch scene to space cinematic
+    this.sceneManager.initSpaceCinematic();
+    this.introUI.showTitle();
+
+    if (this.statusDisplay) {
+      this.statusDisplay.textContent = 'MAIN MENU // ORBITAL STATION';
+      this.statusDisplay.style.color = '#46d9e8';
+    }
+    if (this.sceneDisplay) {
+      this.sceneDisplay.textContent = 'SpaceEnvironment';
+    }
+
+    // Play intro music on main menu
+    this.startNebulaIntro();
+  }
+
+  public restartEntireExpedition(): void {
+    SaveManager.clearSave();
+    window.location.reload();
   }
 }

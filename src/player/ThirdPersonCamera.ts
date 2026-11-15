@@ -4,9 +4,11 @@ import {
   ArcRotateCamera,
   TransformNode,
 } from '@babylonjs/core';
+import { SettingsManager } from '../systems/SettingsManager.ts';
 
 export class ThirdPersonCamera {
   public camera: ArcRotateCamera;
+  private unsubscribeSensitivity?: () => void;
 
   constructor(scene: Scene, target: TransformNode) {
     const canvas = scene.getEngine().getRenderingCanvas();
@@ -34,9 +36,22 @@ export class ThirdPersonCamera {
     // Attach mouse controls
     this.camera.attachControl(canvas, true);
 
+    // Apply user configured mouse sensitivity
+    this.applySensitivity(SettingsManager.getInstance().getSensitivity());
+    this.unsubscribeSensitivity = SettingsManager.getInstance().onSensitivityChange((sens) => {
+      this.applySensitivity(sens);
+    });
+
     // Smooth inertia
     this.camera.inertia = 0.75;
     this.camera.panningInertia = 0;
+  }
+
+  public applySensitivity(multiplier: number): void {
+    const baseSensibility = 1000;
+    const clampedMultiplier = Math.max(0.1, Math.min(4.0, multiplier));
+    this.camera.angularSensibilityX = baseSensibility / clampedMultiplier;
+    this.camera.angularSensibilityY = baseSensibility / clampedMultiplier;
   }
 
   public update(playerPos: Vector3): void {
@@ -60,6 +75,10 @@ export class ThirdPersonCamera {
   }
 
   public dispose(): void {
+    if (this.unsubscribeSensitivity) {
+      this.unsubscribeSensitivity();
+      this.unsubscribeSensitivity = undefined;
+    }
     this.camera.dispose();
   }
 }

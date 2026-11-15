@@ -1,3 +1,5 @@
+import { SettingsManager } from '../systems/SettingsManager.ts';
+
 export class InputManager {
   private keyStates: Map<string, boolean> = new Map();
   private onKeyDownBound: (e: KeyboardEvent) => void;
@@ -18,6 +20,15 @@ export class InputManager {
 
   public isKeyDown(code: string): boolean {
     return this.keyStates.get(code) === true;
+  }
+
+  public isActionActive(actionId: string): boolean {
+    const codes = SettingsManager.getInstance().getCodesForAction(actionId);
+    return codes.some((code) => this.isKeyDown(code));
+  }
+
+  public resetKeys(): void {
+    this.keyStates.clear();
   }
 
   public dispose(): void {

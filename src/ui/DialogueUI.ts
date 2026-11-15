@@ -1,5 +1,6 @@
 import { DialogueLine } from '../data/dialogue.ts';
 import { LunaCharacter } from '../companion/LunaCharacter.ts';
+import { SettingsManager } from '../systems/SettingsManager.ts';
 
 export class DialogueUI {
   private container: HTMLElement;
@@ -85,6 +86,9 @@ export class DialogueUI {
 
   private playChirp(isLuna: boolean): void {
     try {
+      const dialogueVol = SettingsManager.getInstance().getEffectiveDialogueVolume();
+      if (dialogueVol <= 0.001) return;
+
       this.initAudio();
       if (!this.audioCtx) return;
 
@@ -101,8 +105,8 @@ export class DialogueUI {
         const freq = 600 + Math.random() * 300;
         osc.frequency.setValueAtTime(freq, now);
         osc.frequency.exponentialRampToValueAtTime(freq + 200, now + 0.04);
-        gain.gain.setValueAtTime(0.04, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.045);
+        gain.gain.setValueAtTime(0.04 * dialogueVol, now);
+        gain.gain.exponentialRampToValueAtTime(0.001 * dialogueVol, now + 0.045);
         osc.start(now);
         osc.stop(now + 0.05);
       } else {
@@ -110,8 +114,8 @@ export class DialogueUI {
         osc.type = 'triangle';
         const now = this.audioCtx.currentTime;
         osc.frequency.setValueAtTime(280, now);
-        gain.gain.setValueAtTime(0.03, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.03);
+        gain.gain.setValueAtTime(0.03 * dialogueVol, now);
+        gain.gain.exponentialRampToValueAtTime(0.001 * dialogueVol, now + 0.03);
         osc.start(now);
         osc.stop(now + 0.035);
       }
@@ -199,6 +203,15 @@ export class DialogueUI {
     this.isTyping = false;
     this.textEl.textContent = this.currentFullText;
     this.promptEl.style.opacity = '1.0';
+  }
+
+  public hide(): void {
+    this.container.classList.add('hidden');
+    if (this.typeTimer !== null) {
+      clearInterval(this.typeTimer);
+      this.typeTimer = null;
+    }
+    this.onCompleteCallback = null;
   }
 
   public advance(): void {
